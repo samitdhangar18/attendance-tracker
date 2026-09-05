@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Attendance Tracker Samit",
+    "slug": "attendance-tracker-samit",
+    "scheme": "attendancetracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.samitsd.attendancetracker",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#060913"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to set your profile picture."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "459fb596-a1fd-41dd-a6f7-7b52efdf92c4"
+      }
+    }
+  }
+}
