@@ -37,7 +37,7 @@ interface TimetableSlot {
 interface UserProfile {
   name: string;
   college: string;
-  degree: 
+  degree: string;
   semester: string;
 }
 
