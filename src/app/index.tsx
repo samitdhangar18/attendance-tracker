@@ -315,13 +315,6 @@ export default function AttendanceTrackerApp() {
   const [scheduleViewMode, setScheduleViewMode] = useState<'photo' | 'slots'>('photo');
   const [targetGoal, setTargetGoal] = useState<number>(65);
   const [activeTab, setActiveTab] = useState<'Classes' | 'Schedule' | 'Target Planner' | 'Manage'>('Classes');
-  const [analysisDay, setAnalysisDay] = useState<string>(() => {
-    const dayIndex = new Date().getDay();
-    const days = ['Mon', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return days[dayIndex] || 'Mon';
-  });
-  const [analyzerMode, setAnalyzerMode] = useState<'attend' | 'bunk' | 'custom'>('attend');
-  const [simulatedSlotStatus, setSimulatedSlotStatus] = useState<Record<string, 'attend' | 'bunk'>>({});
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   // Modals
@@ -448,17 +441,16 @@ export default function AttendanceTrackerApp() {
   // Sync to Official Timetable Handler
   const handleSyncOfficialTimetable = () => {
     Alert.alert(
-      'Sync Official Timetable',
+      'Reset Official Timetable',
       'Reset all timetable periods to match the official college timetable (6 lectures on Mon, Thu, Fri, Sat; 5 on Tue, Wed)?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Sync Now',
+          text: 'Reset Now',
           onPress: async () => {
             setTimetable(INITIAL_TIMETABLE);
-            setSimulatedSlotStatus({});
             await AsyncStorage.setItem(STORAGE_KEYS.TIMETABLE, JSON.stringify(INITIAL_TIMETABLE));
-            Alert.alert('Timetable Synced', 'Schedule successfully synced with the official timetable.');
+            Alert.alert('Timetable Reset', 'Schedule successfully reset to the official timetable.');
           },
         },
       ]
@@ -630,323 +622,6 @@ export default function AttendanceTrackerApp() {
       const needToAttend = Math.ceil((targetDec * total - present) / (1 - targetDec));
       return { status: 'short', count: needToAttend };
     }
-  };
-
-  // Day-by-Day Timetable Attendance Impact Analysis
-  const daySlots = timetable[analysisDay] || [];
-
-  // Group slots of the selected day by subject to show day-level subject impact
-  const daySubjectGroups = useMemo(() => {
-    const groups: {
-      key: string;
-      subjectName: string;
-      type: 'Theory' | 'Practical';
-      periods: TimetableSlot[];
-      matchedCourse: Course | null;
-    }[] = [];
-
-    daySlots.forEach((slot) => {
-      const matched = findMatchingCourse(slot.subject, courses);
-      const key = matched ? matched.id : slot.subject.trim().toLowerCase();
-      const existing = groups.find((g) => g.key === key);
-      if (existing) {
-        existing.periods.push(slot);
-      } else {
-        groups.push({
-          key,
-          subjectName: matched ? matched.name : slot.subject,
-          type: slot.type,
-          periods: [slot],
-          matchedCourse: matched || null,
-        });
-      }
-    });
-
-    return groups.map((g) => {
-      const count = g.periods.length;
-      const times = g.periods.map((p) => p.time);
-      const faculties = Array.from(
-        new Set(
-          g.periods
-            .map((p) => p.room)
-            .filter((r): r is string => Boolean(r && r.trim().length > 0))
-        )
-      ).join(' • ');
-      const matched = g.matchedCourse;
-
-      const currentPresent = matched ? matched.present : 0;
-      const currentTotal = matched ? matched.total : 0;
-      const currentPct = currentTotal === 0 ? 0 : (currentPresent / currentTotal) * 100;
-
-      // Scenario A: If student attends college (attends all periods of this subject)
-      const attendPresent = currentPresent + count;
-      const attendTotal = currentTotal + count;
-      const attendPct = attendTotal === 0 ? 0 : (attendPresent / attendTotal) * 100;
-      const attendDelta = attendPct - currentPct;
-
-      // Scenario B: If student does not go to college (bunks all periods of this subject)
-      const bunkPresent = currentPresent;
-      const bunkTotal = currentTotal + count;
-      const bunkPct = bunkTotal === 0 ? 0 : (bunkPresent / bunkTotal) * 100;
-      const bunkDelta = bunkPct - currentPct;
-
-      // Check if skipping this day causes this subject to fall below target
-      const dropsBelowTarget = currentTotal > 0 && bunkPct < targetGoal;
-      const deficit = targetGoal - bunkPct;
-
-      return {
-        key: g.key,
-        subjectName: g.subjectName,
-        type: g.type,
-        count,
-        times,
-        faculties,
-        matchedCourse: matched,
-        currentPresent,
-        currentTotal,
-        currentPct,
-        attendPresent,
-        attendTotal,
-        attendPct,
-        attendDelta,
-        bunkPresent,
-        bunkTotal,
-        bunkPct,
-        bunkDelta,
-        dropsBelowTarget,
-        deficit,
-        periods: g.periods,
-      };
-    });
-  }, [daySlots, courses, targetGoal]);
-
-  const dayAnalysis = useMemo(() => {
-    const classCount = daySlots.length;
-    const currentTotal = stats.totalConducted;
-    const currentPresent = stats.totalPresent;
-    const currentPct = stats.presentPct;
-
-    if (classCount === 0) {
-      return {
-        classCount: 0,
-        currentPct,
-        attendAll: { newPct: currentPct, delta: 0, newPresent: currentPresent, newTotal: currentTotal },
-        bunkAll: {
-          newPct: currentPct,
-          delta: 0,
-          newPresent: currentPresent,
-          newTotal: currentTotal,
-          recoveryNeeded: 0,
-          canBunkRemaining: 0,
-        },
-        customSim: {
-          newPct: currentPct,
-          delta: 0,
-          newPresent: currentPresent,
-          newTotal: currentTotal,
-          attendCount: 0,
-          bunkCount: 0,
-        },
-        slotBreakdown: [],
-      };
-    }
-
-    // Scenario 1: Attend All classes on this day (Go to college)
-    const attendNewTotal = currentTotal + classCount;
-    const attendNewPresent = currentPresent + classCount;
-    const attendNewPct = attendNewTotal === 0 ? 0 : (attendNewPresent / attendNewTotal) * 100;
-    const attendDelta = attendNewPct - currentPct;
-
-    // Scenario 2: Bunk / Miss All classes on this day (Skip college)
-    const bunkNewTotal = currentTotal + classCount;
-    const bunkNewPresent = currentPresent;
-    const bunkNewPct = bunkNewTotal === 0 ? 0 : (bunkNewPresent / bunkNewTotal) * 100;
-    const bunkDelta = bunkNewPct - currentPct;
-
-    // Recovery calculation if bunked
-    const targetDec = targetGoal / 100;
-    let recoveryNeeded = 0;
-    let canBunkRemaining = 0;
-    if (bunkNewTotal > 0) {
-      if (bunkNewPct < targetGoal) {
-        recoveryNeeded = Math.ceil((targetDec * bunkNewTotal - bunkNewPresent) / (1 - targetDec));
-      } else {
-        canBunkRemaining = Math.floor((bunkNewPresent - targetDec * bunkNewTotal) / targetDec);
-      }
-    }
-
-    // Scenario 3: Custom Interactive Simulation
-    let customAttendCount = 0;
-    let customBunkCount = 0;
-    daySlots.forEach((slot) => {
-      const status = simulatedSlotStatus[slot.id] ?? 'attend';
-      if (status === 'attend') {
-        customAttendCount++;
-      } else {
-        customBunkCount++;
-      }
-    });
-
-    const customNewTotal = currentTotal + classCount;
-    const customNewPresent = currentPresent + customAttendCount;
-    const customNewPct = customNewTotal === 0 ? 0 : (customNewPresent / customNewTotal) * 100;
-    const customDelta = customNewPct - currentPct;
-
-    // Slot-by-slot subject breakdown
-    const slotBreakdown = daySlots.map((slot) => {
-      const matched = findMatchingCourse(slot.subject, courses);
-      const isAttended = (simulatedSlotStatus[slot.id] ?? 'attend') === 'attend';
-
-      if (!matched) {
-        return {
-          slot,
-          matchedCourse: null,
-          isAttended,
-          currentSubPct: 0,
-          attendSubPct: 0,
-          attendSubDelta: 0,
-          bunkSubPct: 0,
-          bunkSubDelta: 0,
-        };
-      }
-
-      const cPresent = matched.present;
-      const cTotal = matched.total;
-      const currentSubPct = cTotal === 0 ? 0 : (cPresent / cTotal) * 100;
-
-      const attendSubPct = ((cPresent + 1) / (cTotal + 1)) * 100;
-      const attendSubDelta = attendSubPct - currentSubPct;
-
-      const bunkSubPct = (cPresent / (cTotal + 1)) * 100;
-      const bunkSubDelta = bunkSubPct - currentSubPct;
-
-      return {
-        slot,
-        matchedCourse: matched,
-        isAttended,
-        currentSubPct,
-        attendSubPct,
-        attendSubDelta,
-        bunkSubPct,
-        bunkSubDelta,
-      };
-    });
-
-    return {
-      classCount,
-      currentPct,
-      attendAll: {
-        newPct: attendNewPct,
-        delta: attendDelta,
-        newPresent: attendNewPresent,
-        newTotal: attendNewTotal,
-      },
-      bunkAll: {
-        newPct: bunkNewPct,
-        delta: bunkDelta,
-        newPresent: bunkNewPresent,
-        newTotal: bunkNewTotal,
-        recoveryNeeded,
-        canBunkRemaining,
-      },
-      customSim: {
-        newPct: customNewPct,
-        delta: customDelta,
-        newPresent: customNewPresent,
-        newTotal: customNewTotal,
-        attendCount: customAttendCount,
-        bunkCount: customBunkCount,
-      },
-      slotBreakdown,
-    };
-  }, [daySlots, stats, courses, simulatedSlotStatus, targetGoal]);
-
-  const toggleSlotSimulation = (slotId: string) => {
-    setSimulatedSlotStatus((prev) => {
-      const current = prev[slotId] ?? 'attend';
-      return {
-        ...prev,
-        [slotId]: current === 'attend' ? 'bunk' : 'attend',
-      };
-    });
-  };
-
-  const setAllSlotsSimulation = (status: 'attend' | 'bunk') => {
-    const updated: Record<string, 'attend' | 'bunk'> = {};
-    daySlots.forEach((s) => {
-      updated[s.id] = status;
-    });
-    setSimulatedSlotStatus((prev) => ({ ...prev, ...updated }));
-  };
-
-  // Direct Apply Action for Go / Bunk / Custom
-  const handleApplyDayAction = (mode: 'attend' | 'bunk' | 'custom') => {
-    if (daySlots.length === 0) {
-      Alert.alert('No Lectures', `No lectures are scheduled on ${analysisDay}.`);
-      return;
-    }
-
-    const title =
-      mode === 'attend'
-        ? `Mark ${analysisDay} Attended (+${daySlots.length})`
-        : mode === 'bunk'
-        ? `Mark ${analysisDay} Missed / Bunked`
-        : `Apply ${analysisDay} Custom Simulation`;
-
-    const message =
-      mode === 'attend'
-        ? `Mark all ${daySlots.length} lecture(s) on ${analysisDay} as PRESENT in your subject attendance tracker?`
-        : mode === 'bunk'
-        ? `Mark all ${daySlots.length} lecture(s) on ${analysisDay} as ABSENT in your subject attendance tracker?`
-        : `Record ${dayAnalysis.customSim.attendCount} present and ${dayAnalysis.customSim.bunkCount} absent lecture(s) in your tracker?`;
-
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Apply to Tracker',
-        onPress: () => {
-          setCourses((prev) =>
-            prev.map((c) => {
-              let addPresent = 0;
-              let addTotal = 0;
-              daySlots.forEach((slot) => {
-                const matched = findMatchingCourse(slot.subject, prev);
-                if (matched && matched.id === c.id) {
-                  addTotal += 1;
-                  if (mode === 'attend') {
-                    addPresent += 1;
-                  } else if (mode === 'bunk') {
-                    // 0 present added
-                  } else {
-                    if ((simulatedSlotStatus[slot.id] ?? 'attend') === 'attend') {
-                      addPresent += 1;
-                    }
-                  }
-                }
-              });
-
-              if (addTotal > 0) {
-                return {
-                  ...c,
-                  present: c.present + addPresent,
-                  total: c.total + addTotal,
-                };
-              }
-              return c;
-            })
-          );
-
-          Alert.alert(
-            'Attendance Updated!',
-            mode === 'attend'
-              ? `Added ${daySlots.length} present lecture(s) for ${analysisDay}.`
-              : mode === 'bunk'
-              ? `Recorded ${daySlots.length} missed lecture(s) for ${analysisDay}.`
-              : `Recorded ${analysisDay} custom simulation attendance.`
-          );
-        },
-      },
-    ]);
   };
 
   // Subject CRUD
@@ -1367,46 +1042,6 @@ export default function AttendanceTrackerApp() {
           </View>
         </View>
 
-        {/* QUICK DAY IMPACT ANALYZER PILL BAR */}
-        <View style={styles.quickDayCard}>
-          <View style={styles.quickDayHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="flash" size={15} color="#2563EB" />
-              <Text style={styles.quickDayTitle}>Daily Timetable Impact Analyzer</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setActiveTab('Target Planner')}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.quickDayViewAll}>View Full Analysis</Text>
-              <Feather name="chevron-right" size={13} color="#2563EB" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.quickDaySub}>
-            Click any day to see attendance gain if attended or loss if bunked:
-          </Text>
-          <View style={styles.quickDayBtnRow}>
-            {(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const).map((day) => {
-              const count = (timetable[day] || []).length;
-              return (
-                <TouchableOpacity
-                  key={day}
-                  onPress={() => {
-                    setAnalysisDay(day);
-                    setActiveTab('Target Planner');
-                  }}
-                  style={styles.quickDayBtn}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.quickDayBtnText}>{day}</Text>
-                  <Text style={styles.quickDayCountText}>{count} class</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
         {/* FLOATING TAB NAVIGATION BAR */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
@@ -1794,28 +1429,23 @@ export default function AttendanceTrackerApp() {
                     </View>
                   ))
                 )}
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 6 }}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setAnalysisDay(selectedDay);
-                      setActiveTab('Target Planner');
-                    }}
-                    style={styles.scheduleAnalyzeBtn}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="calculator-outline" size={14} color="#FFFFFF" />
-                    <Text style={styles.scheduleAnalyzeBtnText}>
-                      Analyze {selectedDay} Impact
-                    </Text>
-                  </TouchableOpacity>
-
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 10 }}>
                   <TouchableOpacity
                     onPress={() => openSlotModal()}
                     style={styles.scheduleAddPeriodBtn}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="add" size={15} color="#059669" />
+                    <Ionicons name="add" size={16} color="#059669" />
                     <Text style={styles.scheduleAddPeriodBtnText}>Add Period</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleSyncOfficialTimetable}
+                    style={styles.scheduleResetBtn}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="refresh" size={14} color="#475569" />
+                    <Text style={styles.scheduleResetBtnText}>Reset Timetable</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1826,666 +1456,59 @@ export default function AttendanceTrackerApp() {
         {/* TAB 3: TARGET PLANNER */}
         {activeTab === 'Target Planner' && (
           <View style={styles.tabContentWrapper}>
-            {/* SECTION 1: TIMETABLE DAY-BY-DAY ATTENDANCE IMPACT ANALYZER */}
-            <View style={styles.analyzerContainer}>
-              <View style={styles.analyzerHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                  <View style={styles.analyzerIconOrb}>
-                    <MaterialCommunityIcons name="calculator-variant-outline" size={20} color="#2563EB" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.analyzerMainTitle}>Timetable Day Impact Analyzer</Text>
-                    <Text style={styles.analyzerSubtitle}>
-                      Analyze attendance gain if you attend vs loss if you skip college
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={handleSyncOfficialTimetable}
-                  style={styles.analyzerSyncBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="refresh" size={11} color="#2563EB" />
-                  <Text style={styles.analyzerSyncBtnText}>Sync Timetable</Text>
-                </TouchableOpacity>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialCommunityIcons name="shield-airplane-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionTitle}>Safe Bunk & Attendance Recovery</Text>
               </View>
-
-              {/* Clickable Day Selector Pills */}
-              <View style={styles.analyzerDayRow}>
-                {(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const).map((day) => {
-                  const isDayActive = analysisDay === day;
-                  const count = (timetable[day] || []).length;
-                  return (
-                    <TouchableOpacity
-                      key={day}
-                      onPress={() => {
-                        setAnalysisDay(day);
-                        setSimulatedSlotStatus({});
-                      }}
-                      style={[styles.analyzerDayBtn, isDayActive && styles.analyzerDayBtnActive]}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.analyzerDayBtnText, isDayActive && styles.analyzerDayBtnTextActive]}>
-                        {day}
-                      </Text>
-                      <View
-                        style={[
-                          styles.analyzerDayCountBadge,
-                          isDayActive && styles.analyzerDayCountBadgeActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.analyzerDayCountText,
-                            isDayActive && styles.analyzerDayCountTextActive,
-                          ]}
-                        >
-                          {count}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Zero Classes State */}
-              {dayAnalysis.classCount === 0 ? (
-                <View style={styles.analyzerEmptyCard}>
-                  <Feather name="coffee" size={30} color="#94A3B8" />
-                  <Text style={styles.analyzerEmptyTitle}>No classes scheduled on {analysisDay}</Text>
-                  <Text style={styles.analyzerEmptySub}>
-                    Your attendance percentage will remain unaffected on this day.
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ gap: 14 }}>
-                  {/* Mode Selector Tabs: If I Go vs If I Don't Go vs Custom */}
-                  <View style={styles.analyzerModeRow}>
-                    <TouchableOpacity
-                      onPress={() => setAnalyzerMode('attend')}
-                      style={[
-                        styles.analyzerModeBtn,
-                        analyzerMode === 'attend' && styles.analyzerModeBtnAttendActive,
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="trending-up"
-                        size={13}
-                        color={analyzerMode === 'attend' ? '#FFFFFF' : '#059669'}
-                      />
-                      <Text
-                        style={[
-                          styles.analyzerModeBtnText,
-                          analyzerMode === 'attend' && styles.analyzerModeBtnTextActive,
-                        ]}
-                      >
-                        🎒 If I Go (+Gain)
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => setAnalyzerMode('bunk')}
-                      style={[
-                        styles.analyzerModeBtn,
-                        analyzerMode === 'bunk' && styles.analyzerModeBtnBunkActive,
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="trending-down"
-                        size={13}
-                        color={analyzerMode === 'bunk' ? '#FFFFFF' : '#DC2626'}
-                      />
-                      <Text
-                        style={[
-                          styles.analyzerModeBtnText,
-                          analyzerMode === 'bunk' && styles.analyzerModeBtnTextActive,
-                        ]}
-                      >
-                        🏖️ If I Skip (-Loss)
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => setAnalyzerMode('custom')}
-                      style={[
-                        styles.analyzerModeBtn,
-                        analyzerMode === 'custom' && styles.analyzerModeBtnCustomActive,
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="options-outline"
-                        size={13}
-                        color={analyzerMode === 'custom' ? '#FFFFFF' : '#2563EB'}
-                      />
-                      <Text
-                        style={[
-                          styles.analyzerModeBtnText,
-                          analyzerMode === 'custom' && styles.analyzerModeBtnTextActive,
-                        ]}
-                      >
-                        ⚡ Custom
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Informational tip if total conducted is 0 */}
-                  {stats.totalConducted === 0 && (
-                    <View style={styles.analyzerTipCard}>
-                      <Ionicons name="bulb-outline" size={15} color="#D97706" />
-                      <Text style={styles.analyzerTipText}>
-                        Tip: You have 0 marked classes in the tracker. Enter your attendance counts in the{' '}
-                        <Text style={{ fontWeight: '800' }}>Classes</Text> tab to see personalized real-time gain/loss based on your semester record!
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* PRIMARY HERO CARD BASED ON MODE */}
-                  {analyzerMode === 'attend' && (
-                    <View style={styles.heroImpactCardAttend}>
-                      <View style={styles.heroImpactTopRow}>
-                        <View style={styles.heroBadgeGreen}>
-                          <Ionicons name="school" size={13} color="#059669" />
-                          <Text style={styles.heroBadgeGreenText}>
-                            ATTENDING COLLEGE ON {analysisDay.toUpperCase()}
-                          </Text>
-                        </View>
-                        <Text style={styles.heroClassesBadgeGreen}>
-                          +{dayAnalysis.classCount} Classes Attended
-                        </Text>
-                      </View>
-
-                      <View style={styles.heroImpactValueRow}>
-                        <View>
-                          <Text style={styles.heroImpactSubTitle}>Overall Attendance Gain</Text>
-                          <Text style={styles.heroImpactBigGreen}>
-                            +{dayAnalysis.attendAll.delta.toFixed(1)}%
-                          </Text>
-                        </View>
-                        <View style={styles.heroImpactComparisonBox}>
-                          <Text style={styles.heroImpactCompLabel}>New Overall</Text>
-                          <Text style={styles.heroImpactCompValGreen}>
-                            {dayAnalysis.attendAll.newPct.toFixed(1)}%
-                          </Text>
-                          <Text style={styles.heroImpactCompPrev}>
-                            was {dayAnalysis.currentPct.toFixed(1)}%
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.heroVerdictGreen}>
-                        <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                        <Text style={styles.heroVerdictGreenText}>
-                          {dayAnalysis.attendAll.newPct >= targetGoal
-                            ? `Keeps you safely above your ${targetGoal}% target goal!`
-                            : `Boosts your attendance closer to ${targetGoal}% target!`}
-                        </Text>
-                      </View>
-
-                      <TouchableOpacity
-                        onPress={() => handleApplyDayAction('attend')}
-                        style={styles.heroActionBtnGreen}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="checkmark-done" size={16} color="#FFFFFF" />
-                        <Text style={styles.heroActionBtnText}>
-                          Mark All {dayAnalysis.classCount} Lectures Attended in Tracker
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {analyzerMode === 'bunk' && (
-                    <View style={styles.heroImpactCardBunk}>
-                      <View style={styles.heroImpactTopRow}>
-                        <View style={styles.heroBadgeRed}>
-                          <Ionicons name="umbrella-outline" size={13} color="#DC2626" />
-                          <Text style={styles.heroBadgeRedText}>
-                            MISSING / BUNKING COLLEGE ON {analysisDay.toUpperCase()}
-                          </Text>
-                        </View>
-                        <Text style={styles.heroClassesBadgeRed}>
-                          -{dayAnalysis.classCount} Classes Missed
-                        </Text>
-                      </View>
-
-                      <View style={styles.heroImpactValueRow}>
-                        <View>
-                          <Text style={styles.heroImpactSubTitle}>Overall Attendance Drop</Text>
-                          <Text style={styles.heroImpactBigRed}>
-                            {dayAnalysis.bunkAll.delta.toFixed(1)}%
-                          </Text>
-                        </View>
-                        <View style={styles.heroImpactComparisonBox}>
-                          <Text style={styles.heroImpactCompLabel}>New Overall</Text>
-                          <Text style={styles.heroImpactCompValRed}>
-                            {dayAnalysis.bunkAll.newPct.toFixed(1)}%
-                          </Text>
-                          <Text style={styles.heroImpactCompPrev}>
-                            was {dayAnalysis.currentPct.toFixed(1)}%
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Safety Verdict Box */}
-                      <View
-                        style={[
-                          styles.verdictBanner,
-                          {
-                            backgroundColor:
-                              dayAnalysis.bunkAll.newPct >= targetGoal ? '#ECFDF5' : '#FFF1F2',
-                            borderColor:
-                              dayAnalysis.bunkAll.newPct >= targetGoal ? '#A7F3D0' : '#FECDD3',
-                          },
-                        ]}
-                      >
-                        <Ionicons
-                          name={
-                            dayAnalysis.bunkAll.newPct >= targetGoal
-                              ? 'shield-checkmark'
-                              : 'alert-circle'
-                          }
-                          size={18}
-                          color={
-                            dayAnalysis.bunkAll.newPct >= targetGoal ? '#059669' : '#E11D48'
-                          }
-                        />
-                        <Text style={styles.verdictBannerText}>
-                          {dayAnalysis.bunkAll.newPct >= targetGoal ? (
-                            <>
-                              <Text style={{ fontWeight: '800', color: '#059669' }}>
-                                Safe to Bunk {analysisDay}? YES.{' '}
-                              </Text>
-                              Even if you miss all {dayAnalysis.classCount} classes, your attendance remains at{' '}
-                              <Text style={{ fontWeight: '800' }}>
-                                {dayAnalysis.bunkAll.newPct.toFixed(1)}%
-                              </Text>{' '}
-                              (safely above {targetGoal}% target). You can still safely bunk{' '}
-                              <Text style={{ fontWeight: '800' }}>
-                                {dayAnalysis.bunkAll.canBunkRemaining}
-                              </Text>{' '}
-                              more classes!
-                            </>
-                          ) : (
-                            <>
-                              <Text style={{ fontWeight: '800', color: '#E11D48' }}>
-                                Safe to Bunk {analysisDay}? NO.{' '}
-                              </Text>
-                              Bunking {analysisDay} drops attendance to{' '}
-                              <Text style={{ fontWeight: '800' }}>
-                                {dayAnalysis.bunkAll.newPct.toFixed(1)}%
-                              </Text>, falling{' '}
-                              <Text style={{ fontWeight: '800' }}>
-                                {(targetGoal - dayAnalysis.bunkAll.newPct).toFixed(1)}%
-                              </Text>{' '}
-                              below your {targetGoal}% minimum target! You will need to attend{' '}
-                              <Text style={{ fontWeight: '800', color: '#E11D48' }}>
-                                {dayAnalysis.bunkAll.recoveryNeeded} classes in a row
-                              </Text>{' '}
-                              to recover!
-                            </>
-                          )}
-                        </Text>
-                      </View>
-
-                      <TouchableOpacity
-                        onPress={() => handleApplyDayAction('bunk')}
-                        style={styles.heroActionBtnRed}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="close-circle" size={16} color="#FFFFFF" />
-                        <Text style={styles.heroActionBtnText}>
-                          Mark All {dayAnalysis.classCount} Lectures Missed in Tracker
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {analyzerMode === 'custom' && (
-                    <View style={styles.heroImpactCardCustom}>
-                      <View style={styles.heroImpactTopRow}>
-                        <View style={styles.heroBadgeBlue}>
-                          <Ionicons name="options" size={13} color="#2563EB" />
-                          <Text style={styles.heroBadgeBlueText}>
-                            CUSTOM PLAN FOR {analysisDay.toUpperCase()}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                          <TouchableOpacity
-                            onPress={() => setAllSlotsSimulation('attend')}
-                            style={styles.simPresetBtnAttend}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.simPresetBtnAttendText}>Attend All</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => setAllSlotsSimulation('bunk')}
-                            style={styles.simPresetBtnBunk}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.simPresetBtnBunkText}>Bunk All</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      <View style={styles.heroImpactValueRow}>
-                        <View>
-                          <Text style={styles.heroImpactSubTitle}>
-                            Simulated: {dayAnalysis.customSim.attendCount}/{dayAnalysis.classCount} Attended
-                          </Text>
-                          <Text
-                            style={[
-                              styles.heroImpactBigCustom,
-                              {
-                                color:
-                                  dayAnalysis.customSim.delta >= 0 ? '#059669' : '#DC2626',
-                              },
-                            ]}
-                          >
-                            {dayAnalysis.customSim.delta >= 0 ? '+' : ''}
-                            {dayAnalysis.customSim.delta.toFixed(1)}%
-                          </Text>
-                        </View>
-                        <View style={styles.heroImpactComparisonBox}>
-                          <Text style={styles.heroImpactCompLabel}>New Overall</Text>
-                          <Text
-                            style={[
-                              styles.heroImpactCompValCustom,
-                              {
-                                color:
-                                  dayAnalysis.customSim.newPct >= targetGoal
-                                    ? '#059669'
-                                    : '#DC2626',
-                              },
-                            ]}
-                          >
-                            {dayAnalysis.customSim.newPct.toFixed(1)}%
-                          </Text>
-                          <Text style={styles.heroImpactCompPrev}>
-                            was {dayAnalysis.currentPct.toFixed(1)}%
-                          </Text>
-                        </View>
-                      </View>
-
-                      <TouchableOpacity
-                        onPress={() => handleApplyDayAction('custom')}
-                        style={styles.heroActionBtnBlue}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="checkbox-outline" size={16} color="#FFFFFF" />
-                        <Text style={styles.heroActionBtnText}>
-                          Apply Custom Plan to Tracker
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {/* DEDICATED SECTION 1: SUBJECT-BY-SUBJECT IMPACT FOR THIS DAY */}
-                  <View style={styles.daySubjectSection}>
-                    <View style={styles.daySubjectSectionHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <MaterialCommunityIcons name="book-multiple" size={17} color="#2563EB" />
-                        <Text style={styles.daySubjectSectionTitle}>
-                          Subjects Scheduled on {analysisDay}
-                        </Text>
-                      </View>
-                      <View style={styles.daySubjectCountPill}>
-                        <Text style={styles.daySubjectCountPillText}>
-                          {daySubjectGroups.length} Subjects • {dayAnalysis.classCount} Lectures
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.daySubjectSectionSub}>
-                      Exact percentage gain if you go vs loss if you skip for each subject:
-                    </Text>
-
-                    <View style={{ gap: 10, marginTop: 10 }}>
-                      {daySubjectGroups.map((group) => {
-                        return (
-                          <View key={group.key} style={styles.subjectImpactCard}>
-                            <View style={styles.subjectImpactHeader}>
-                              <View style={{ flex: 1, paddingRight: 8 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                  <MaterialCommunityIcons
-                                    name={getSubjectIcon(group.subjectName)}
-                                    size={16}
-                                    color="#2563EB"
-                                  />
-                                  <Text style={styles.subjectImpactTitle}>
-                                    {group.subjectName}
-                                  </Text>
-                                </View>
-                                <Text style={styles.subjectImpactSchedule}>
-                                  {group.times.join(' • ')} {group.faculties ? `(${group.faculties})` : ''}
-                                </Text>
-                              </View>
-                              <View style={styles.subjectLectureBadge}>
-                                <Text style={styles.subjectLectureBadgeText}>
-                                  {group.count} {group.count > 1 ? 'Lectures' : 'Lecture'}
-                                </Text>
-                              </View>
-                            </View>
-
-                            <View style={styles.subjectCurrRow}>
-                              <Text style={styles.subjectCurrLabel}>
-                                Current Attendance:{' '}
-                                <Text style={{ fontWeight: '800', color: '#0F172A' }}>
-                                  {group.currentPresent}/{group.currentTotal} (
-                                  {group.currentPct.toFixed(1)}%)
-                                </Text>
-                              </Text>
-                            </View>
-
-                            {/* Dual Outcome Display: If You Go vs If You Skip */}
-                            <View style={styles.subjectOutcomeRow}>
-                              {/* Option A: If You Go */}
-                              <View
-                                style={[
-                                  styles.subjectOutcomeBox,
-                                  styles.subjectOutcomeBoxGreen,
-                                  analyzerMode === 'attend' && styles.subjectOutcomeBoxHighlight,
-                                ]}
-                              >
-                                <View style={styles.subjectOutcomeBoxHeader}>
-                                  <Ionicons name="trending-up" size={12} color="#059669" />
-                                  <Text style={styles.subjectOutcomeBoxTitleGreen}>IF YOU GO</Text>
-                                </View>
-                                <Text style={styles.subjectOutcomeDeltaGreen}>
-                                  +{group.attendDelta.toFixed(1)}%
-                                </Text>
-                                <Text style={styles.subjectOutcomeNewGreen}>
-                                  New: {group.attendPresent}/{group.attendTotal} (
-                                  {group.attendPct.toFixed(1)}%)
-                                </Text>
-                              </View>
-
-                              {/* Option B: If You Don't Go */}
-                              <View
-                                style={[
-                                  styles.subjectOutcomeBox,
-                                  styles.subjectOutcomeBoxRed,
-                                  analyzerMode === 'bunk' && styles.subjectOutcomeBoxHighlightRed,
-                                ]}
-                              >
-                                <View style={styles.subjectOutcomeBoxHeader}>
-                                  <Ionicons name="trending-down" size={12} color="#DC2626" />
-                                  <Text style={styles.subjectOutcomeBoxTitleRed}>IF YOU SKIP</Text>
-                                </View>
-                                <Text style={styles.subjectOutcomeDeltaRed}>
-                                  {group.bunkDelta.toFixed(1)}%
-                                </Text>
-                                <Text style={styles.subjectOutcomeNewRed}>
-                                  New: {group.bunkPresent}/{group.bunkTotal} (
-                                  {group.bunkPct.toFixed(1)}%)
-                                </Text>
-                              </View>
-                            </View>
-
-                            {/* Danger Alert if skipping drops this subject below target */}
-                            {group.dropsBelowTarget && (
-                              <View style={styles.subjectDropAlert}>
-                                <Ionicons name="warning" size={13} color="#DC2626" />
-                                <Text style={styles.subjectDropAlertText}>
-                                  Skipping {analysisDay} drops this subject {group.deficit.toFixed(1)}% below your {targetGoal}% target!
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* DEDICATED SECTION 2: INDIVIDUAL PERIOD SCHEDULE & TOGGLE (Custom mode or detailed inspect) */}
-                  <View style={styles.simCardContainer}>
-                    <View style={styles.simCardHeader}>
-                      <View style={{ flex: 1, paddingRight: 6 }}>
-                        <Text style={styles.simCardTitle}>Period-by-Period Schedule</Text>
-                        <Text style={styles.simCardSub}>
-                          {analyzerMode === 'custom'
-                            ? 'Tap each period to toggle Attend vs Bunk simulation:'
-                            : 'All scheduled periods for ' + analysisDay + ' from the official timetable:'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Class Slots List */}
-                    <View style={{ gap: 8, marginTop: 10 }}>
-                      {dayAnalysis.slotBreakdown.map((item, idx) => {
-                        const isAttending =
-                          analyzerMode === 'attend'
-                            ? true
-                            : analyzerMode === 'bunk'
-                            ? false
-                            : item.isAttended;
-
-                        return (
-                          <View key={item.slot.id || idx} style={styles.simSlotRow}>
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <View style={styles.simSlotTimeBadge}>
-                                  <Ionicons name="time-outline" size={11} color="#64748B" />
-                                  <Text style={styles.simSlotTimeText}>{item.slot.time}</Text>
-                                </View>
-                                <View style={styles.simSlotTypeBadge}>
-                                  <Text style={styles.simSlotTypeBadgeText}>{item.slot.type}</Text>
-                                </View>
-                              </View>
-
-                              <Text style={styles.simSlotSubject}>{item.slot.subject}</Text>
-
-                              {item.slot.room && (
-                                <Text style={styles.simUnmatchedText}>
-                                  {item.slot.room}
-                                </Text>
-                              )}
-                            </View>
-
-                            {/* Status indicator or Interactive Toggle in Custom mode */}
-                            {analyzerMode === 'custom' ? (
-                              <TouchableOpacity
-                                onPress={() => toggleSlotSimulation(item.slot.id)}
-                                style={[
-                                  styles.simToggleBtn,
-                                  isAttending ? styles.simToggleBtnAttend : styles.simToggleBtnBunk,
-                                ]}
-                                activeOpacity={0.7}
-                              >
-                                <Ionicons
-                                  name={isAttending ? 'checkmark-circle' : 'close-circle'}
-                                  size={14}
-                                  color={isAttending ? '#059669' : '#DC2626'}
-                                />
-                                <Text
-                                  style={[
-                                    styles.simToggleBtnText,
-                                    isAttending
-                                      ? styles.simToggleBtnTextAttend
-                                      : styles.simToggleBtnTextBunk,
-                                  ]}
-                                >
-                                  {isAttending ? 'Attend' : 'Bunk'}
-                                </Text>
-                              </TouchableOpacity>
-                            ) : (
-                              <View
-                                style={[
-                                  styles.simStaticBadge,
-                                  isAttending ? styles.simStaticBadgeAttend : styles.simStaticBadgeBunk,
-                                ]}
-                              >
-                                <Ionicons
-                                  name={isAttending ? 'checkmark-circle' : 'close-circle'}
-                                  size={13}
-                                  color={isAttending ? '#059669' : '#DC2626'}
-                                />
-                                <Text
-                                  style={[
-                                    styles.simStaticBadgeText,
-                                    isAttending
-                                      ? styles.simStaticBadgeTextAttend
-                                      : styles.simStaticBadgeTextBunk,
-                                  ]}
-                                >
-                                  {isAttending ? 'Attended' : 'Missed'}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-                </View>
-              )}
-            </View>
-
-            {/* SECTION 2: SAFE BUNK & RECOVERY PER SUBJECT */}
-            <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialCommunityIcons name="shield-airplane-outline" size={18} color="#3778D5" />
-                <Text style={styles.sectionTitle}>Safe Bunk & Attendance Recovery per Subject</Text>
+              <View style={styles.plannerGoalBadge}>
+                <Text style={styles.plannerGoalBadgeText}>Target: {targetGoal}%</Text>
               </View>
             </View>
+            <Text style={styles.plannerSubText}>
+              Per-subject safety buffer and continuous lectures required to maintain your institutional goal.
+            </Text>
 
-            {courses.map((course) => {
-              const advice = calculateGoalAdvice(course.present, course.total, targetGoal);
-              const pct = course.total === 0 ? 0 : (course.present / course.total) * 100;
+            <View style={{ gap: 12, marginTop: 12 }}>
+              {courses.map((course) => {
+                const advice = calculateGoalAdvice(course.present, course.total, targetGoal);
+                const pct = course.total === 0 ? 0 : (course.present / course.total) * 100;
 
-              return (
-                <View key={course.id} style={styles.plannerCard}>
-                  <View style={styles.plannerCardTop}>
-                    <Text style={styles.plannerSubjectName}>{course.name}</Text>
-                    <Text
-                      style={[
-                        styles.plannerPctText,
-                        { color: pct >= targetGoal ? '#18A77A' : '#E45C70' },
-                      ]}
-                    >
-                      {pct.toFixed(1)}%
-                    </Text>
+                return (
+                  <View key={course.id} style={styles.plannerCard}>
+                    <View style={styles.plannerCardTop}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <View style={[styles.plannerDot, { backgroundColor: course.color || '#2563EB' }]} />
+                        <Text style={styles.plannerSubjectName}>{course.name}</Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.plannerPctText,
+                          { color: pct >= targetGoal ? '#10B981' : '#E11D48' },
+                        ]}
+                      >
+                        {pct.toFixed(1)}%
+                      </Text>
+                    </View>
+
+                    <View style={styles.plannerAdviceBox}>
+                      <FontAwesome5
+                        name={advice.status === 'safe' ? 'umbrella-beach' : 'running'}
+                        size={13}
+                        color={advice.status === 'safe' ? '#10B981' : '#E11D48'}
+                      />
+                      <Text style={styles.plannerAdviceText}>
+                        {course.total === 0
+                          ? 'No class attendance marked yet.'
+                          : advice.status === 'safe'
+                          ? `Safe Zone: You can safely bunk ${advice.count} more class(es).`
+                          : `Shortage Alert: Must attend next ${advice.count} lecture(s) continuously.`}
+                      </Text>
+                    </View>
                   </View>
-
-                  <View style={styles.plannerAdviceBox}>
-                    <FontAwesome5
-                      name={advice.status === 'safe' ? 'umbrella-beach' : 'running'}
-                      size={13}
-                      color={advice.status === 'safe' ? '#18A77A' : '#E45C70'}
-                    />
-                    <Text style={styles.plannerAdviceText}>
-                      {course.total === 0
-                        ? 'No class attendance marked yet.'
-                        : advice.status === 'safe'
-                        ? `Safe Zone: You can safely bunk ${advice.count} more class(es).`
-                        : `Shortage Alert: Must attend next ${advice.count} lecture(s) continuously.`}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
           </View>
         )}
 
@@ -3448,25 +2471,30 @@ const styles = StyleSheet.create({
   },
   plannerCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   plannerCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   plannerSubjectName: {
-    color: '#172033',
-    fontSize: 13.5,
-    fontWeight: '700',
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
     flex: 1,
   },
   plannerPctText: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '900',
     marginLeft: 8,
   },
@@ -3474,15 +2502,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F4F7FB',
-    borderRadius: 8,
-    padding: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   plannerAdviceText: {
     flex: 1,
-    color: '#45546A',
-    fontSize: 11,
+    color: '#334155',
+    fontSize: 11.5,
     fontWeight: '600',
+    lineHeight: 16,
   },
   manageCardRow: {
     backgroundColor: '#FFFFFF',
@@ -3812,865 +2843,63 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
-  // Day Impact Analyzer Quick Bar
-  quickDayCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  quickDayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  quickDayTitle: {
-    color: '#0F172A',
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  quickDayViewAll: {
-    color: '#2563EB',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  quickDaySub: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 3,
-    marginBottom: 10,
-  },
-  quickDayBtnRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  quickDayBtn: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingVertical: 7,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  quickDayBtnText: {
-    color: '#0F172A',
-    fontSize: 11.5,
-    fontWeight: '800',
-  },
-  quickDayCountText: {
-    color: '#64748B',
-    fontSize: 9.5,
-    fontWeight: '600',
-    marginTop: 1,
-  },
   // Schedule Tab Buttons
-  scheduleAnalyzeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 5,
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  scheduleAnalyzeBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11.5,
-    fontWeight: '800',
-  },
   scheduleAddPeriodBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingVertical: 9,
+    borderRadius: 12,
     gap: 4,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
   scheduleAddPeriodBtnText: {
     color: '#059669',
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '800',
   },
-  // Day-by-Day Impact Analyzer Main Container
-  analyzerContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-    marginBottom: 16,
-  },
-  analyzerHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  analyzerIconOrb: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  analyzerMainTitle: {
-    color: '#0F172A',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  analyzerSubtitle: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 1,
-  },
-  analyzerDayBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  analyzerDayBadgeText: {
-    color: '#2563EB',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  analyzerSyncBtn: {
+  scheduleResetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  analyzerSyncBtnText: {
-    color: '#2563EB',
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
-  analyzerDayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 6,
-    marginBottom: 14,
-  },
-  analyzerDayBtn: {
-    flex: 1,
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 3,
-  },
-  analyzerDayBtnActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  analyzerDayBtnText: {
-    color: '#64748B',
-    fontSize: 11.5,
-    fontWeight: '800',
-  },
-  analyzerDayBtnTextActive: {
-    color: '#FFFFFF',
-  },
-  analyzerDayCountBadge: {
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 6,
-  },
-  analyzerDayCountBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  analyzerDayCountText: {
-    color: '#64748B',
-    fontSize: 9.5,
-    fontWeight: '800',
-  },
-  analyzerDayCountTextActive: {
-    color: '#FFFFFF',
-  },
-  analyzerEmptyCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    padding: 24,
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  analyzerEmptyTitle: {
-    color: '#0F172A',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  analyzerEmptySub: {
-    color: '#64748B',
-    fontSize: 11.5,
-    textAlign: 'center',
-  },
-  analyzerModeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  analyzerModeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 12,
+    gap: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  analyzerModeBtnAttendActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
-    shadowColor: '#059669',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  analyzerModeBtnBunkActive: {
-    backgroundColor: '#DC2626',
-    borderColor: '#DC2626',
-    shadowColor: '#DC2626',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  analyzerModeBtnCustomActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  analyzerModeBtnText: {
+  scheduleResetBtnText: {
     color: '#64748B',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  analyzerModeBtnTextActive: {
-    color: '#FFFFFF',
-  },
-  analyzerTipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFFBEB',
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  analyzerTipText: {
-    flex: 1,
-    color: '#92400E',
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  // Hero Cards
-  heroImpactCardAttend: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  heroImpactCardBunk: {
-    backgroundColor: '#FFF1F2',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#FECDD3',
-  },
-  heroImpactCardCustom: {
-    backgroundColor: '#F0F9FF',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  heroImpactTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  heroBadgeGreen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  heroBadgeGreenText: {
-    color: '#059669',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  heroClassesBadgeGreen: {
-    color: '#059669',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  heroBadgeRed: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  heroBadgeRedText: {
-    color: '#DC2626',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  heroClassesBadgeRed: {
-    color: '#DC2626',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  heroBadgeBlue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  heroBadgeBlueText: {
-    color: '#2563EB',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  heroImpactValueRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 12,
-  },
-  heroImpactSubTitle: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  heroImpactBigGreen: {
-    color: '#059669',
-    fontSize: 30,
-    fontWeight: '900',
-  },
-  heroImpactBigRed: {
-    color: '#DC2626',
-    fontSize: 30,
-    fontWeight: '900',
-  },
-  heroImpactBigCustom: {
-    fontSize: 30,
-    fontWeight: '900',
-  },
-  heroImpactComparisonBox: {
-    alignItems: 'flex-end',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  heroImpactCompLabel: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  heroImpactCompValGreen: {
-    color: '#059669',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  heroImpactCompValRed: {
-    color: '#DC2626',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  heroImpactCompValCustom: {
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  heroImpactCompPrev: {
-    color: '#94A3B8',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  heroVerdictGreen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#DCFCE7',
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  heroVerdictGreenText: {
-    color: '#065F46',
-    fontSize: 11.5,
-    fontWeight: '700',
-    flex: 1,
-  },
-  heroActionBtnGreen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#059669',
-    paddingVertical: 11,
-    borderRadius: 12,
-    shadowColor: '#059669',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroActionBtnRed: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#DC2626',
-    paddingVertical: 11,
-    borderRadius: 12,
-    marginTop: 10,
-    shadowColor: '#DC2626',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroActionBtnBlue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#2563EB',
-    paddingVertical: 11,
-    borderRadius: 12,
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '800',
-  },
-  // Day Subject Section
-  daySubjectSection: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  daySubjectSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  daySubjectSectionTitle: {
-    color: '#0F172A',
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  daySubjectCountPill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  daySubjectCountPillText: {
-    color: '#2563EB',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  daySubjectSectionSub: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  subjectImpactCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  subjectImpactHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  subjectImpactTitle: {
-    color: '#0F172A',
-    fontSize: 13,
-    fontWeight: '800',
-    flexShrink: 1,
-  },
-  subjectImpactSchedule: {
-    color: '#64748B',
-    fontSize: 10.5,
-    marginTop: 2,
-  },
-  subjectLectureBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  subjectLectureBadgeText: {
-    color: '#2563EB',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  subjectCurrRow: {
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  subjectCurrLabel: {
-    color: '#64748B',
-    fontSize: 11,
-  },
-  subjectOutcomeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  subjectOutcomeBox: {
-    flex: 1,
-    borderRadius: 8,
-    padding: 8,
-    borderWidth: 1,
-  },
-  subjectOutcomeBoxGreen: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
-  subjectOutcomeBoxRed: {
-    backgroundColor: '#FFF1F2',
-    borderColor: '#FECDD3',
-  },
-  subjectOutcomeBoxHighlight: {
-    borderWidth: 2,
-    borderColor: '#059669',
-  },
-  subjectOutcomeBoxHighlightRed: {
-    borderWidth: 2,
-    borderColor: '#DC2626',
-  },
-  subjectOutcomeBoxHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginBottom: 2,
-  },
-  subjectOutcomeBoxTitleGreen: {
-    color: '#059669',
-    fontSize: 9.5,
-    fontWeight: '900',
-  },
-  subjectOutcomeBoxTitleRed: {
-    color: '#DC2626',
-    fontSize: 9.5,
-    fontWeight: '900',
-  },
-  subjectOutcomeDeltaGreen: {
-    color: '#059669',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  subjectOutcomeDeltaRed: {
-    color: '#DC2626',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  subjectOutcomeNewGreen: {
-    color: '#334155',
-    fontSize: 10,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  subjectOutcomeNewRed: {
-    color: '#334155',
-    fontSize: 10,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  subjectDropAlert: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFF1F2',
-    padding: 6,
-    borderRadius: 6,
-    marginTop: 8,
-  },
-  subjectDropAlertText: {
-    color: '#BE123C',
-    fontSize: 10,
-    fontWeight: '700',
-    flex: 1,
-  },
-  simStaticBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  simStaticBadgeAttend: {
-    backgroundColor: '#DCFCE7',
-  },
-  simStaticBadgeBunk: {
-    backgroundColor: '#FEE2E2',
-  },
-  simStaticBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
-  simStaticBadgeTextAttend: {
-    color: '#15803D',
-  },
-  simStaticBadgeTextBunk: {
-    color: '#B91C1C',
-  },
-  verdictBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  verdictBannerText: {
-    flex: 1,
-    color: '#334155',
-    fontSize: 11.5,
-    lineHeight: 16,
-  },
-  simCardContainer: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  simCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  simCardTitle: {
-    color: '#0F172A',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  simCardSub: {
-    color: '#64748B',
-    fontSize: 10.5,
-    marginTop: 1,
-  },
-  simPresetBtnAttend: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  simPresetBtnAttendText: {
-    color: '#15803D',
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
-  simPresetBtnBunk: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  simPresetBtnBunkText: {
-    color: '#B91C1C',
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
-  simLiveBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  simLiveBarText: {
-    color: '#1E40AF',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  simLiveBarPct: {
-    color: '#1D4ED8',
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '700',
   },
-  simSlotRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 10,
+  // Target Planner Styles
+  plannerGoalBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#DBEAFE',
   },
-  simSlotTimeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  simSlotTimeText: {
-    color: '#475569',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  simSlotTypeBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  simSlotTypeBadgeText: {
+  plannerGoalBadgeText: {
     color: '#2563EB',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  simSlotSubject: {
-    color: '#0F172A',
-    fontSize: 13,
-    fontWeight: '800',
-    marginTop: 3,
-  },
-  simImpactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
-  },
-  simImpactCurr: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  simImpactSep: {
-    color: '#CBD5E1',
-    fontSize: 10,
-  },
-  simImpactDelta: {
-    fontSize: 10.5,
-    fontWeight: '700',
-  },
-  simUnmatchedText: {
-    color: '#94A3B8',
-    fontSize: 10,
-    marginTop: 2,
-  },
-  simToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  simToggleBtnAttend: {
-    backgroundColor: '#DCFCE7',
-  },
-  simToggleBtnBunk: {
-    backgroundColor: '#FEE2E2',
-  },
-  simToggleBtnText: {
     fontSize: 11,
     fontWeight: '800',
   },
-  simToggleBtnTextAttend: {
-    color: '#15803D',
+  plannerSubText: {
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+    marginBottom: 4,
   },
-  simToggleBtnTextBunk: {
-    color: '#B91C1C',
-  },
-  simApplyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#2563EB',
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginTop: 12,
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  simApplyBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '800',
+  plannerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
 });
