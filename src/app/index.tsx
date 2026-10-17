@@ -46,12 +46,12 @@ interface UserProfile {
 const DEFAULT_TIMETABLE_IMG = require('../../assets/timetable.png');
 
 const STORAGE_KEYS = {
-  COURSES: '@attendance_courses_v12',
-  TIMETABLE: '@attendance_timetable_v12',
-  PROFILE_PIC: '@attendance_profile_pic_v12',
-  PROFILE_DATA: '@attendance_profile_data_v12',
-  GOAL: '@attendance_goal_v12',
-  TIMETABLE_IMG: '@attendance_timetable_img_v12',
+  COURSES: '@attendance_courses_v5',
+  TIMETABLE: '@attendance_timetable_v5',
+  PROFILE_PIC: '@attendance_profile_pic_v5',
+  PROFILE_DATA: '@attendance_profile_data_v5',
+  GOAL: '@attendance_goal_v5',
+  TIMETABLE_IMG: '@attendance_timetable_img_v6',
 };
 
 const PALETTE = [
@@ -82,7 +82,6 @@ const INITIAL_COURSES: Course[] = [
   { id: '8', name: 'ToC Lab', type: 'Practical', present: 0, total: 0, color: '#E45C70' },
   { id: '9', name: 'DMW Lab', type: 'Practical', present: 0, total: 0, color: '#8359D1' },
   { id: '10', name: 'Minor Project', type: 'Practical', present: 0, total: 0, color: '#D68B16' },
-  { id: '11', name: 'Library (L)', type: 'Theory', present: 0, total: 0, color: '#0EA5E9' },
 ];
 
 const INITIAL_TIMETABLE: Record<string, TimetableSlot[]> = {
@@ -139,13 +138,11 @@ function CircularProgress({
   color,
   size = 46,
   strokeWidth = 4.5,
-  showLabel = true,
 }: {
   percentage: number;
   color: string;
   size?: number;
   strokeWidth?: number;
-  showLabel?: boolean;
 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -159,7 +156,7 @@ function CircularProgress({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="#F1F5F9"
+          stroke="#E2E8F0"
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -176,19 +173,35 @@ function CircularProgress({
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
-      {showLabel && (
-        <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
-          <Text
-            style={{
-              fontSize: size >= 70 ? 12 : size >= 60 ? 10.5 : 9,
-              fontWeight: '900',
-              color: '#0F172A',
-            }}
-          >
-            {percentage.toFixed(2)}%
-          </Text>
-        </View>
-      )}
+      <View style={{ position: 'absolute' }}>
+        <Text style={{ fontSize: size >= 70 ? 12 : 9, fontWeight: '800', color: '#1E293B' }}>
+          {percentage.toFixed(2)}%
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function CollegeBuildingGraphic() {
+  return (
+    <View style={styles.collegeBuildingBadge}>
+      <Svg width={72} height={60} viewBox="0 0 68 58" fill="none">
+        <Path d="M34 52 L58 40 L34 28 L10 40 Z" fill="#E2E8F0" />
+        <Path d="M10 40 L34 52 L34 55 L10 43 Z" fill="#CBD5E1" />
+        <Path d="M34 52 L58 40 L58 43 L34 55 Z" fill="#94A3B8" />
+        <Path d="M24 20 L34 25 L34 45 L24 40 Z" fill="#3B82F6" />
+        <Path d="M34 25 L44 20 L44 40 L34 45 Z" fill="#60A5FA" />
+        <Path d="M34 14 L44 20 L34 25 L24 20 Z" fill="#93C5FD" />
+        <Path d="M26 26 L29 28 L29 31 L26 29 Z" fill="#FFFFFF" />
+        <Path d="M26 33 L29 35 L29 38 L26 36 Z" fill="#FFFFFF" />
+        <Path d="M38 28 L41 26 L41 29 L38 31 Z" fill="#FFFFFF" />
+        <Path d="M38 35 L41 33 L41 36 L38 38 Z" fill="#FFFFFF" />
+        <Path d="M32 8 L36 10 L34 14 Z" fill="#1D4ED8" />
+        <Circle cx="17" cy="38" r="5" fill="#10B981" />
+        <Circle cx="51" cy="38" r="5" fill="#10B981" />
+        <Circle cx="14" cy="41" r="3.5" fill="#059669" />
+        <Circle cx="54" cy="41" r="3.5" fill="#059669" />
+      </Svg>
     </View>
   );
 }
@@ -262,32 +275,6 @@ function findMatchingCourse(slotSubject: string, courses: Course[]): Course | un
   });
   if (match) return match;
 
-  // 5. Special lab and subject fallbacks
-  if (normSlot.includes('library')) {
-    match = courses.find((c) => c.name.toLowerCase().includes('library'));
-    if (match) return match;
-  }
-  if (normSlot.includes('minor')) {
-    match = courses.find((c) => c.name.toLowerCase().includes('minor'));
-    if (match) return match;
-  }
-  if (normSlot.includes('ml lab')) {
-    match = courses.find((c) => c.name.toLowerCase().includes('ml lab'));
-    if (match) return match;
-  }
-  if (normSlot.includes('coa lab')) {
-    match = courses.find((c) => c.name.toLowerCase().includes('coa lab'));
-    if (match) return match;
-  }
-  if (normSlot.includes('toc lab')) {
-    match = courses.find((c) => c.name.toLowerCase().includes('toc lab'));
-    if (match) return match;
-  }
-  if (normSlot.includes('dmw lab')) {
-    match = courses.find((c) => c.name.toLowerCase().includes('dmw lab'));
-    if (match) return match;
-  }
-
   return undefined;
 }
 
@@ -300,13 +287,14 @@ export default function AttendanceTrackerApp() {
   const [fullScreenImageVisible, setFullScreenImageVisible] = useState(false);
   const [scheduleViewMode, setScheduleViewMode] = useState<'photo' | 'slots'>('photo');
   const [targetGoal, setTargetGoal] = useState<number>(65);
-  const [activeTab, setActiveTab] = useState<'Classes' | 'Schedule' | 'Impact' | 'Target Planner' | 'Manage'>('Classes');
+  const [activeTab, setActiveTab] = useState<'Classes' | 'Schedule' | 'Target Planner' | 'Manage'>('Classes');
+  const [analysisDay, setAnalysisDay] = useState<string>(() => {
+    const dayIndex = new Date().getDay();
+    const days = ['Mon', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[dayIndex] || 'Mon';
+  });
+  const [simulatedSlotStatus, setSimulatedSlotStatus] = useState<Record<string, 'attend' | 'bunk'>>({});
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
-
-  // Timetable Impact Analyzer State
-  const [impactStartDay, setImpactStartDay] = useState<string>('Mon');
-  const [impactDaysInput, setImpactDaysInput] = useState<string>('6');
-  const [impactMode, setImpactMode] = useState<'single' | 'multiday'>('single');
 
   // Modals
   const [profileModalVisible, setProfileModalVisible] = useState(false);
@@ -329,97 +317,25 @@ export default function AttendanceTrackerApp() {
   const [slotTypeInput, setSlotTypeInput] = useState<'Theory' | 'Practical'>('Theory');
   const [slotRoomInput, setSlotRoomInput] = useState('');
 
-  // Load Saved Data with legacy migration and timetable verification
+  // Load Saved Data
   useEffect(() => {
     const loadStoredData = async () => {
       try {
-        const [
-          savedCourses,
-          legacyCourses,
-          savedTimetable,
-          legacyTimetable,
-          savedProfile,
-          legacyProfile,
-          savedProfilePic,
-          legacyProfilePic,
-          savedGoal,
-          legacyGoal,
-          savedTimetableImg,
-          legacyTimetableImg,
-        ] = await Promise.all([
+        const [savedCourses, savedTimetable, savedProfile, savedProfilePic, savedGoal, savedTimetableImg] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.COURSES),
-          AsyncStorage.getItem('@attendance_courses_v5'),
           AsyncStorage.getItem(STORAGE_KEYS.TIMETABLE),
-          AsyncStorage.getItem('@attendance_timetable_v5'),
           AsyncStorage.getItem(STORAGE_KEYS.PROFILE_DATA),
-          AsyncStorage.getItem('@attendance_profile_data_v5'),
           AsyncStorage.getItem(STORAGE_KEYS.PROFILE_PIC),
-          AsyncStorage.getItem('@attendance_profile_pic_v5'),
           AsyncStorage.getItem(STORAGE_KEYS.GOAL),
-          AsyncStorage.getItem('@attendance_goal_v5'),
           AsyncStorage.getItem(STORAGE_KEYS.TIMETABLE_IMG),
-          AsyncStorage.getItem('@attendance_timetable_img_v6'),
         ]);
 
-        // Courses
-        const rawCourses = savedCourses || legacyCourses;
-        if (rawCourses) {
-          try {
-            const parsedCourses: Course[] = JSON.parse(rawCourses);
-            const merged = [...parsedCourses];
-            INITIAL_COURSES.forEach((initC) => {
-              if (!merged.some((c) => c.name.toLowerCase() === initC.name.toLowerCase())) {
-                merged.push(initC);
-              }
-            });
-            setCourses(merged);
-          } catch (e) {
-            setCourses(INITIAL_COURSES);
-          }
-        }
-
-        // Timetable: strictly verify that Monday has all official lectures (>= 6)
-        let finalTimetable = INITIAL_TIMETABLE;
-        const rawTimetable = savedTimetable || legacyTimetable;
-        if (rawTimetable) {
-          try {
-            const parsed = JSON.parse(rawTimetable);
-            if (
-              parsed &&
-              parsed.Mon &&
-              Array.isArray(parsed.Mon) &&
-              parsed.Mon.length >= 6 &&
-              parsed.Tue &&
-              parsed.Tue.length >= 5
-            ) {
-              finalTimetable = parsed;
-            }
-          } catch (e) {
-            finalTimetable = INITIAL_TIMETABLE;
-          }
-        }
-        setTimetable(finalTimetable);
-        await AsyncStorage.setItem(STORAGE_KEYS.TIMETABLE, JSON.stringify(finalTimetable));
-
-        // Profile Data
-        const rawProfile = savedProfile || legacyProfile;
-        if (rawProfile) {
-          try {
-            setProfile(JSON.parse(rawProfile));
-          } catch {}
-        }
-
-        // Profile Picture
-        const rawPic = savedProfilePic || legacyProfilePic;
-        if (rawPic) setProfileImage(rawPic);
-
-        // Goal
-        const rawGoal = savedGoal || legacyGoal;
-        if (rawGoal) setTargetGoal(Number(rawGoal));
-
-        // Timetable Image
-        const rawTimetableImg = savedTimetableImg || legacyTimetableImg;
-        if (rawTimetableImg) setTimetableImage(rawTimetableImg);
+        if (savedCourses) setCourses(JSON.parse(savedCourses));
+        if (savedTimetable) setTimetable(JSON.parse(savedTimetable));
+        if (savedProfile) setProfile(JSON.parse(savedProfile));
+        if (savedProfilePic) setProfileImage(savedProfilePic);
+        if (savedGoal) setTargetGoal(Number(savedGoal));
+        if (savedTimetableImg) setTimetableImage(savedTimetableImg);
       } catch (e) {
         console.error('Storage load failed', e);
       } finally {
@@ -428,25 +344,6 @@ export default function AttendanceTrackerApp() {
     };
     loadStoredData();
   }, []);
-
-  // Sync to Official Timetable Handler
-  const handleSyncOfficialTimetable = () => {
-    Alert.alert(
-      'Reset Official Timetable',
-      'Reset all timetable periods to match the official college timetable (6 lectures on Mon, Thu, Fri, Sat; 5 on Tue, Wed)?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset Now',
-          onPress: async () => {
-            setTimetable(INITIAL_TIMETABLE);
-            await AsyncStorage.setItem(STORAGE_KEYS.TIMETABLE, JSON.stringify(INITIAL_TIMETABLE));
-            Alert.alert('Timetable Reset', 'Schedule successfully reset to the official timetable.');
-          },
-        },
-      ]
-    );
-  };
 
   // Save changes
   useEffect(() => {
@@ -579,106 +476,6 @@ export default function AttendanceTrackerApp() {
     };
   }, [courses]);
 
-  // Timetable-driven Impact Calculations (Gain & Loss)
-  const impactData = useMemo(() => {
-    const totalConducted = stats.totalConducted;
-    const totalPresent = stats.totalPresent;
-    const currentPct = stats.presentPct;
-    const collegeDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-    // 1. Specific Day Calculation
-    const singleSlots = timetable[impactStartDay] || [];
-    const singleCount = singleSlots.length;
-
-    // If attended all classes on this specific day
-    const singleAttendPct =
-      totalConducted + singleCount > 0
-        ? ((totalPresent + singleCount) / (totalConducted + singleCount)) * 100
-        : 0;
-    const singleGain = singleAttendPct - currentPct;
-
-    // If absent / miss all classes on this specific day
-    const singleAbsentPct =
-      totalConducted + singleCount > 0
-        ? (totalPresent / (totalConducted + singleCount)) * 100
-        : 0;
-    const singleLoss = currentPct - singleAbsentPct;
-
-    // 2. Multi-Day Forecast (e.g. 6 days)
-    const parsedDays = Math.max(1, Math.min(30, parseInt(impactDaysInput, 10) || 1));
-    const startIdx = collegeDays.indexOf(impactStartDay) >= 0 ? collegeDays.indexOf(impactStartDay) : 0;
-
-    let cumulativeLectures = 0;
-    const dayBreakdown: Array<{
-      dayIndex: number;
-      dayName: string;
-      slotsCount: number;
-      subjects: string[];
-      cumulativeLectures: number;
-      attendPct: number;
-      gainPct: number;
-      absentPct: number;
-      lossPct: number;
-    }> = [];
-
-    for (let i = 0; i < parsedDays; i++) {
-      const dayName = collegeDays[(startIdx + i) % collegeDays.length];
-      const daySlots = timetable[dayName] || [];
-      const slotsCount = daySlots.length;
-      cumulativeLectures += slotsCount;
-
-      const runningAttendPct =
-        totalConducted + cumulativeLectures > 0
-          ? ((totalPresent + cumulativeLectures) / (totalConducted + cumulativeLectures)) * 100
-          : 0;
-      const runningAbsentPct =
-        totalConducted + cumulativeLectures > 0
-          ? (totalPresent / (totalConducted + cumulativeLectures)) * 100
-          : 0;
-
-      dayBreakdown.push({
-        dayIndex: i + 1,
-        dayName,
-        slotsCount,
-        subjects: Array.from(new Set(daySlots.map((s) => s.subject))),
-        cumulativeLectures,
-        attendPct: runningAttendPct,
-        gainPct: runningAttendPct - currentPct,
-        absentPct: runningAbsentPct,
-        lossPct: currentPct - runningAbsentPct,
-      });
-    }
-
-    const totalMultiLectures = cumulativeLectures;
-    const multiAttendPct =
-      totalConducted + totalMultiLectures > 0
-        ? ((totalPresent + totalMultiLectures) / (totalConducted + totalMultiLectures)) * 100
-        : 0;
-    const multiGain = multiAttendPct - currentPct;
-
-    const multiAbsentPct =
-      totalConducted + totalMultiLectures > 0
-        ? (totalPresent / (totalConducted + totalMultiLectures)) * 100
-        : 0;
-    const multiLoss = currentPct - multiAbsentPct;
-
-    return {
-      singleSlots,
-      singleCount,
-      singleAttendPct,
-      singleGain,
-      singleAbsentPct,
-      singleLoss,
-      parsedDays,
-      totalMultiLectures,
-      multiAttendPct,
-      multiGain,
-      multiAbsentPct,
-      multiLoss,
-      dayBreakdown,
-    };
-  }, [stats, timetable, impactStartDay, impactDaysInput]);
-
   // Stepper Modifier
   const updateCount = (id: string, field: 'present' | 'total', delta: number) => {
     setCourses((prev) =>
@@ -706,25 +503,205 @@ export default function AttendanceTrackerApp() {
     const currentPct = (present / total) * 100;
 
     if (currentPct >= target) {
-      // Maximum future classes you can bunk without dropping below target%
-      // (present) / (total + B) >= target / 100
-      // 100 * present >= target * (total + B)
-      // 100 * present - target * total >= target * B
-      // B <= (100 * present - target * total) / target
       const canBunk = Math.floor((100 * present - target * total) / target);
       return { status: 'safe', count: Math.max(0, canBunk) };
     } else {
-      // Minimum consecutive classes you must attend to reach >= target%
-      // (present + A) / (total + A) >= target / 100
-      // 100 * (present + A) >= target * (total + A)
-      // (100 - target) * A >= target * total - 100 * present
-      // A >= (target * total - 100 * present) / (100 - target)
       if (target >= 100) return { status: 'short', count: 999 };
       const diff = target * total - 100 * present;
       const divisor = 100 - target;
       const needToAttend = Math.ceil(diff / divisor);
       return { status: 'short', count: Math.max(1, needToAttend) };
     }
+  };
+
+  // Day-by-Day Timetable Attendance Impact Analysis
+  const daySlots = timetable[analysisDay] || [];
+
+  const dayAnalysis = useMemo(() => {
+    const classCount = daySlots.length;
+    const currentTotal = stats.totalConducted;
+    const currentPresent = stats.totalPresent;
+    const currentPct = stats.presentPct;
+
+    if (classCount === 0) {
+      return {
+        classCount: 0,
+        currentPct,
+        attendAll: { newPct: currentPct, delta: 0, newPresent: currentPresent, newTotal: currentTotal },
+        bunkAll: { newPct: currentPct, delta: 0, newPresent: currentPresent, newTotal: currentTotal },
+        customSim: {
+          newPct: currentPct,
+          delta: 0,
+          newPresent: currentPresent,
+          newTotal: currentTotal,
+          attendCount: 0,
+          bunkCount: 0,
+        },
+        slotBreakdown: [],
+      };
+    }
+
+    // Scenario 1: Attend All classes on this day
+    const attendNewTotal = currentTotal + classCount;
+    const attendNewPresent = currentPresent + classCount;
+    const attendNewPct = attendNewTotal === 0 ? 0 : (attendNewPresent / attendNewTotal) * 100;
+    const attendDelta = attendNewPct - currentPct;
+
+    // Scenario 2: Bunk / Miss All classes on this day
+    const bunkNewTotal = currentTotal + classCount;
+    const bunkNewPresent = currentPresent;
+    const bunkNewPct = bunkNewTotal === 0 ? 0 : (bunkNewPresent / bunkNewTotal) * 100;
+    const bunkDelta = bunkNewPct - currentPct;
+
+    // Scenario 3: Custom Interactive Simulation
+    let customAttendCount = 0;
+    let customBunkCount = 0;
+    daySlots.forEach((slot) => {
+      const status = simulatedSlotStatus[slot.id] ?? 'attend';
+      if (status === 'attend') {
+        customAttendCount++;
+      } else {
+        customBunkCount++;
+      }
+    });
+
+    const customNewTotal = currentTotal + classCount;
+    const customNewPresent = currentPresent + customAttendCount;
+    const customNewPct = customNewTotal === 0 ? 0 : (customNewPresent / customNewTotal) * 100;
+    const customDelta = customNewPct - currentPct;
+
+    // Slot-by-slot subject breakdown
+    const slotBreakdown = daySlots.map((slot) => {
+      const matched = findMatchingCourse(slot.subject, courses);
+      const isAttended = (simulatedSlotStatus[slot.id] ?? 'attend') === 'attend';
+
+      if (!matched) {
+        return {
+          slot,
+          matchedCourse: null,
+          isAttended,
+          currentSubPct: 0,
+          attendSubPct: 0,
+          attendSubDelta: 0,
+          bunkSubPct: 0,
+          bunkSubDelta: 0,
+        };
+      }
+
+      const cPresent = matched.present;
+      const cTotal = matched.total;
+      const currentSubPct = cTotal === 0 ? 0 : (cPresent / cTotal) * 100;
+
+      const attendSubPct = ((cPresent + 1) / (cTotal + 1)) * 100;
+      const attendSubDelta = attendSubPct - currentSubPct;
+
+      const bunkSubPct = (cPresent / (cTotal + 1)) * 100;
+      const bunkSubDelta = bunkSubPct - currentSubPct;
+
+      return {
+        slot,
+        matchedCourse: matched,
+        isAttended,
+        currentSubPct,
+        attendSubPct,
+        attendSubDelta,
+        bunkSubPct,
+        bunkSubDelta,
+      };
+    });
+
+    return {
+      classCount,
+      currentPct,
+      attendAll: {
+        newPct: attendNewPct,
+        delta: attendDelta,
+        newPresent: attendNewPresent,
+        newTotal: attendNewTotal,
+      },
+      bunkAll: {
+        newPct: bunkNewPct,
+        delta: bunkDelta,
+        newPresent: bunkNewPresent,
+        newTotal: bunkNewTotal,
+      },
+      customSim: {
+        newPct: customNewPct,
+        delta: customDelta,
+        newPresent: customNewPresent,
+        newTotal: customNewTotal,
+        attendCount: customAttendCount,
+        bunkCount: customBunkCount,
+      },
+      slotBreakdown,
+    };
+  }, [daySlots, stats, courses, simulatedSlotStatus]);
+
+  const toggleSlotSimulation = (slotId: string) => {
+    setSimulatedSlotStatus((prev) => {
+      const current = prev[slotId] ?? 'attend';
+      return {
+        ...prev,
+        [slotId]: current === 'attend' ? 'bunk' : 'attend',
+      };
+    });
+  };
+
+  const setAllSlotsSimulation = (status: 'attend' | 'bunk') => {
+    const updated: Record<string, 'attend' | 'bunk'> = {};
+    daySlots.forEach((s) => {
+      updated[s.id] = status;
+    });
+    setSimulatedSlotStatus((prev) => ({ ...prev, ...updated }));
+  };
+
+  const handleApplyDayAttendance = () => {
+    if (daySlots.length === 0) {
+      Alert.alert('No Lectures', `No lectures are scheduled on ${analysisDay}.`);
+      return;
+    }
+
+    const { attendCount, bunkCount } = dayAnalysis.customSim;
+
+    Alert.alert(
+      `Apply ${analysisDay} Attendance`,
+      `Record ${attendCount} attended and ${bunkCount} missed class(es) into your tracker subjects?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Apply to Tracker',
+          onPress: () => {
+            setCourses((prev) =>
+              prev.map((c) => {
+                let addPresent = 0;
+                let addTotal = 0;
+                daySlots.forEach((slot) => {
+                  const matched = findMatchingCourse(slot.subject, prev);
+                  if (matched && matched.id === c.id) {
+                    addTotal += 1;
+                    if ((simulatedSlotStatus[slot.id] ?? 'attend') === 'attend') {
+                      addPresent += 1;
+                    }
+                  }
+                });
+                if (addTotal > 0) {
+                  return {
+                    ...c,
+                    present: c.present + addPresent,
+                    total: c.total + addTotal,
+                  };
+                }
+                return c;
+              })
+            );
+            Alert.alert(
+              'Attendance Applied!',
+              `Recorded ${analysisDay} attendance (${attendCount} Present, ${bunkCount} Absent).`
+            );
+          },
+        },
+      ]
+    );
   };
 
   // Subject CRUD
@@ -868,18 +845,26 @@ export default function AttendanceTrackerApp() {
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* SLEEK SPACIOUS HEADER HERO */}
+        {/* TOP HERO HEADER */}
         <View style={styles.headerHero}>
           <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
             <Defs>
               <LinearGradient id="heroGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                 <Stop offset="0%" stopColor="#1E3A8A" />
-                <Stop offset="50%" stopColor="#2563EB" />
-                <Stop offset="100%" stopColor="#3B82F6" />
+                <Stop offset="40%" stopColor="#2563EB" />
+                <Stop offset="80%" stopColor="#0284C7" />
+                <Stop offset="100%" stopColor="#06B6D4" />
               </LinearGradient>
             </Defs>
             <Rect width="100%" height="100%" fill="url(#heroGradient)" />
-            <Circle cx="90%" cy="10%" r="80" fill="rgba(255, 255, 255, 0.06)" />
+            <Path
+              d="M-20,130 Q100,80 220,120 T460,95 L460,220 L-20,220 Z"
+              fill="rgba(255, 255, 255, 0.08)"
+            />
+            <Path
+              d="M-20,150 Q120,105 260,140 T460,115 L460,220 L-20,220 Z"
+              fill="rgba(255, 255, 255, 0.06)"
+            />
           </Svg>
 
           <View style={styles.headerTopRow}>
@@ -900,24 +885,22 @@ export default function AttendanceTrackerApp() {
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.8} style={{ flex: 1, paddingRight: 6 }}>
+              <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.8}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={styles.headerName}>{profile.name}</Text>
-                  <Feather name="edit-2" size={13} color="rgba(255, 255, 255, 0.85)" />
+                  <Feather name="edit-2" size={13} color="#FFFFFF" />
                 </View>
-                <Text style={styles.headerSemester} numberOfLines={1}>
-                  {profile.semester} • {profile.college}
-                </Text>
+                <Text style={styles.headerSemester}>{profile.semester}</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Quick Actions: Bell & Calendar */}
+            {/* Action Buttons: Bell & Calendar */}
             <View style={styles.headerActionsRow}>
               <TouchableOpacity
                 onPress={() => {
                   Alert.alert(
-                    'Attendance Overview',
-                    `${profile.name}, your overall attendance is ${stats.presentPct.toFixed(2)}% with a subject average of ${stats.avgPct.toFixed(2)}%. Target is ${targetGoal}%. ${overallAdvice.status === 'safe' ? `You can safely bunk ${overallAdvice.count} classes.` : `Attend next ${overallAdvice.count} lectures in a row to reach goal.`}`,
+                    'Attendance Notifications',
+                    `${profile.name}, your overall attendance is ${stats.presentPct.toFixed(2)}%. Target is ${targetGoal}%. Keep attending lectures!`,
                     [{ text: 'OK' }]
                   );
                 }}
@@ -925,6 +908,7 @@ export default function AttendanceTrackerApp() {
                 activeOpacity={0.8}
               >
                 <Feather name="bell" size={18} color="#FFFFFF" />
+                <View style={styles.bellBadgeDot} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -938,229 +922,240 @@ export default function AttendanceTrackerApp() {
           </View>
         </View>
 
-        {/* MASTER OVERALL ATTENDANCE HERO CARD */}
-        <View style={styles.overviewHeroCard}>
-          <View style={styles.overviewTopRow}>
-            <View style={{ flex: 1, paddingRight: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialCommunityIcons name="chart-arc" size={17} color="#2563EB" />
-                <Text style={styles.overviewCardLabel}>ATTENDANCE PERFORMANCE</Text>
-              </View>
-              <Text style={styles.overviewCardSub}>
-                {stats.presentPct >= targetGoal
-                  ? `Safely above your ${targetGoal}% institutional goal`
-                  : `Shortage: ${(targetGoal - stats.presentPct).toFixed(2)}% below ${targetGoal}% goal`}
-              </Text>
+        {/* OVERLAPPING COLLEGE / INSTITUTION CARD */}
+        <View style={styles.profileBanner}>
+          <View style={styles.profileBannerTop}>
+            <View style={styles.verifiedTag}>
+              <MaterialCommunityIcons name="shield-check" size={13} color="#059669" />
+              <Text style={styles.verifiedTagText}>OFFLINE SAVED</Text>
+              <MaterialCommunityIcons name="wifi-off" size={12} color="#059669" style={{ marginLeft: 2 }} />
             </View>
-
-            <CircularProgress
-              percentage={stats.presentPct}
-              color={stats.presentPct >= targetGoal ? '#10B981' : '#F43F5E'}
-              size={66}
-              strokeWidth={6.5}
-            />
+            <TouchableOpacity onPress={openProfileEdit} style={styles.editBioBtn} activeOpacity={0.7}>
+              <Feather name="edit-3" size={13} color="#2563EB" />
+              <Text style={styles.editBioBtnText}>Edit Info</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* DUAL STATS: PRESENT % AND AVERAGE % */}
-          <View style={styles.twinPillRow}>
-            {/* PRESENT % */}
-            <View
-              style={[
-                styles.twinStatCard,
-                {
-                  borderColor: stats.presentPct >= targetGoal ? '#BBF7D0' : '#FECDD3',
-                },
-              ]}
-            >
-              <View style={styles.twinStatTop}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="checkmark-done-circle" size={13.5} color="#2563EB" />
-                  <Text style={styles.twinStatLabel}>PRESENT %</Text>
-                </View>
-                <View
-                  style={[
-                    styles.twinBadge,
-                    { backgroundColor: stats.presentPct >= targetGoal ? '#DCFCE7' : '#FEE2E2' },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.twinBadgeText,
-                      { color: stats.presentPct >= targetGoal ? '#15803D' : '#B91C1C' },
-                    ]}
-                  >
-                    {stats.presentPct >= targetGoal ? 'Safe' : 'Short'}
-                  </Text>
-                </View>
-              </View>
-              <Text
-                style={[
-                  styles.twinStatValue,
-                  { color: stats.presentPct >= targetGoal ? '#059669' : '#DC2626' },
-                ]}
-              >
-                {stats.presentPct.toFixed(2)}%
-              </Text>
-              <Text style={styles.twinStatCaption}>Total Attended Ratio</Text>
+          <View style={styles.collegeBuildingRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.collegeText}>{profile.college}</Text>
+              <Text style={styles.degreeText}>{profile.degree}</Text>
             </View>
-
-            {/* AVERAGE % */}
-            <View
-              style={[
-                styles.twinStatCard,
-                {
-                  borderColor: stats.avgPct >= targetGoal ? '#DDD6FE' : '#FECDD3',
-                },
-              ]}
-            >
-              <View style={styles.twinStatTop}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <MaterialCommunityIcons name="chart-bell-curve" size={13.5} color="#7C3AED" />
-                  <Text style={[styles.twinStatLabel, { color: '#7C3AED' }]}>AVERAGE %</Text>
-                </View>
-                <View
-                  style={[
-                    styles.twinBadge,
-                    { backgroundColor: stats.avgPct >= targetGoal ? '#EDE9FE' : '#FEE2E2' },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.twinBadgeText,
-                      { color: stats.avgPct >= targetGoal ? '#5B21B6' : '#B91C1C' },
-                    ]}
-                  >
-                    Mean
-                  </Text>
-                </View>
-              </View>
-              <Text
-                style={[
-                  styles.twinStatValue,
-                  { color: stats.avgPct >= targetGoal ? '#6D28D9' : '#DC2626' },
-                ]}
-              >
-                {stats.avgPct.toFixed(2)}%
-              </Text>
-              <Text style={styles.twinStatCaption}>
-                Across {courses.filter((c) => c.total > 0).length} Subjects
-              </Text>
-            </View>
+            <CollegeBuildingGraphic />
           </View>
 
-          {/* Smart Safe/Shortage Banner */}
+          {/* Shortage Alert / Safe Zone Banner */}
           <TouchableOpacity
             onPress={() => setActiveTab('Target Planner')}
             activeOpacity={0.85}
             style={[
-              styles.overviewStatusBanner,
+              styles.targetStatusBox,
               {
                 backgroundColor: overallAdvice.status === 'safe' ? '#ECFDF5' : '#FFF1F2',
-                borderColor: overallAdvice.status === 'safe' ? '#A7F3D0' : '#FECDD3',
+                borderColor: overallAdvice.status === 'safe' ? '#A7F3D0' : '#FFE4E6',
               },
             ]}
           >
             <View
               style={[
-                styles.overviewStatusIconWrap,
+                styles.alertIconCircle,
                 { backgroundColor: overallAdvice.status === 'safe' ? '#10B981' : '#F43F5E' },
               ]}
             >
-              <Ionicons
-                name={overallAdvice.status === 'safe' ? 'checkmark' : 'alert'}
-                size={14}
-                color="#FFFFFF"
-              />
+              {overallAdvice.status === 'safe' ? (
+                <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+              ) : (
+                <Text style={styles.alertExclamationMark}>!</Text>
+              )}
             </View>
-            <Text style={styles.overviewStatusText}>
-              {stats.totalConducted === 0 ? (
-                'No classes marked yet. Use steppers below to add attendance.'
-              ) : overallAdvice.status === 'safe' ? (
+            <Text style={styles.targetStatusBoxText}>
+              {overallAdvice.status === 'safe' ? (
                 <>
                   <Text style={{ fontWeight: '800', color: '#059669' }}>Safe Zone: </Text>
-                  You can safely bunk next{' '}
+                  You can bunk next{' '}
                   <Text style={{ fontWeight: '800', color: '#059669' }}>{overallAdvice.count}</Text>{' '}
-                  class(es) maintaining {targetGoal}% target.
+                  class(es) maintaining <Text style={{ fontWeight: '800' }}>{targetGoal}%</Text> target.
                 </>
               ) : (
                 <>
-                  <Text style={{ fontWeight: '800', color: '#DC2626' }}>Shortage Alert: </Text>
+                  <Text style={{ fontWeight: '800', color: '#E11D48' }}>Shortage Alert: </Text>
                   Attend next{' '}
-                  <Text style={{ fontWeight: '800', color: '#DC2626' }}>{overallAdvice.count}</Text>{' '}
-                  lecture(s) in a row to reach {targetGoal}%.
+                  <Text style={{ fontWeight: '800', color: '#E11D48' }}>{overallAdvice.count}</Text>{' '}
+                  lecture(s) continuously to reach{' '}
+                  <Text style={{ fontWeight: '800' }}>{targetGoal}%</Text>.
                 </>
               )}
             </Text>
             <Feather
               name="chevron-right"
-              size={15}
-              color={overallAdvice.status === 'safe' ? '#059669' : '#DC2626'}
+              size={16}
+              color={overallAdvice.status === 'safe' ? '#10B981' : '#F43F5E'}
             />
           </TouchableOpacity>
+        </View>
 
-          {/* 3 Mathematically Connected Metrics: Attended + Missed = Total Held */}
-          <View style={styles.overviewMetricsRow}>
-            <View style={styles.overviewMetricCol}>
-              <Text style={styles.overviewMetricLabel}>ATTENDED</Text>
-              <View style={styles.overviewMetricValRow}>
-                <Ionicons name="checkmark-circle" size={15} color="#059669" />
-                <Text style={[styles.overviewMetricVal, { color: '#059669' }]}>
-                  {stats.totalPresent}
+        {/* 2x2 KPI METRICS GRID */}
+        <View style={styles.kpiGrid}>
+          {/* Card 1: Present % */}
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiHeader}>
+              <MaterialCommunityIcons name="chart-box-outline" size={16} color="#10B981" />
+              <Text style={styles.kpiLabel}>PRESENT %</Text>
+            </View>
+            <View style={styles.kpiBodyRow}>
+              <View>
+                <Text style={[styles.kpiValue, { color: '#059669' }]}>
+                  {stats.presentPct.toFixed(2)}%
                 </Text>
+                <Text style={styles.kpiSubText}>Keep going!</Text>
+              </View>
+              <CircularProgress percentage={stats.presentPct} color="#10B981" size={50} strokeWidth={5} />
+            </View>
+          </View>
+
+          {/* Card 2: Average % */}
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiHeader}>
+              <MaterialCommunityIcons name="chart-line" size={16} color="#2563EB" />
+              <Text style={styles.kpiLabel}>AVERAGE %</Text>
+            </View>
+            <View style={styles.kpiBodyRow}>
+              <View>
+                <Text style={[styles.kpiValue, { color: '#2563EB' }]}>
+                  {stats.avgPct.toFixed(2)}%
+                </Text>
+                <Text style={styles.kpiSubText}>Overall average</Text>
+              </View>
+              <CircularProgress percentage={stats.avgPct} color="#2563EB" size={50} strokeWidth={5} />
+            </View>
+          </View>
+
+          {/* Card 3: Attended */}
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiHeader}>
+              <Ionicons name="book-outline" size={15} color="#D97706" />
+              <Text style={styles.kpiLabel}>ATTENDED</Text>
+            </View>
+            <View style={styles.kpiBodyRow}>
+              <View>
+                <Text style={[styles.kpiValue, { color: '#D97706' }]}>{stats.totalPresent}</Text>
+                <Text style={styles.kpiSubText}>Total classes</Text>
+              </View>
+              <View style={styles.kpiAttendedIconWrap}>
+                <View style={styles.kpiAttendedInnerBadge}>
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                </View>
               </View>
             </View>
+          </View>
 
-            <View style={styles.overviewMetricDivider} />
-
-            <View style={styles.overviewMetricCol}>
-              <Text style={styles.overviewMetricLabel}>MISSED</Text>
-              <View style={styles.overviewMetricValRow}>
-                <Ionicons name="close-circle" size={15} color="#DC2626" />
-                <Text style={[styles.overviewMetricVal, { color: '#DC2626' }]}>
-                  {stats.totalAbsent}
-                </Text>
-              </View>
+          {/* Card 4: Missed */}
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiHeader}>
+              <Ionicons name="calendar-outline" size={15} color="#DC2626" />
+              <Text style={styles.kpiLabel}>MISSED</Text>
             </View>
-
-            <View style={styles.overviewMetricDivider} />
-
-            <View style={styles.overviewMetricCol}>
-              <Text style={styles.overviewMetricLabel}>TOTAL HELD</Text>
-              <View style={styles.overviewMetricValRow}>
-                <MaterialCommunityIcons name="book-open-page-variant" size={15} color="#2563EB" />
-                <Text style={[styles.overviewMetricVal, { color: '#1E293B' }]}>
-                  {stats.totalConducted}
-                </Text>
+            <View style={styles.kpiBodyRow}>
+              <View>
+                <Text style={[styles.kpiValue, { color: '#DC2626' }]}>{stats.totalAbsent}</Text>
+                <Text style={styles.kpiSubText}>Total classes</Text>
+              </View>
+              <View style={styles.kpiMissedIconWrap}>
+                <View style={styles.kpiMissedInnerBadge}>
+                  <Ionicons name="close" size={14} color="#FFFFFF" />
+                </View>
               </View>
             </View>
           </View>
         </View>
 
-        {/* SLEEK TARGET THRESHOLD SELECTOR */}
-        <View style={styles.targetBarCard}>
-          <View style={styles.targetBarHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <MaterialCommunityIcons name="target" size={17} color="#2563EB" />
-              <Text style={styles.targetBarTitle}>Institutional Target</Text>
+        {/* TARGET ATTENDANCE THRESHOLD CARD */}
+        <View style={styles.targetAdjustCard}>
+          <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
+            <Defs>
+              <LinearGradient id="targetCardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <Stop offset="0%" stopColor="#2563EB" />
+                <Stop offset="50%" stopColor="#4338CA" />
+                <Stop offset="100%" stopColor="#6366F1" />
+              </LinearGradient>
+            </Defs>
+            <Rect width="100%" height="100%" fill="url(#targetCardGrad)" />
+            <Circle cx="15%" cy="30%" r="90" fill="rgba(255,255,255,0.06)" />
+            <Circle cx="85%" cy="85%" r="75" fill="rgba(255,255,255,0.05)" />
+          </Svg>
+
+          <View style={styles.targetAdjustHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              <MaterialCommunityIcons name="target" size={32} color="#FFFFFF" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.targetAdjustTitle}>Target Attendance Threshold</Text>
+                <Text style={styles.targetAdjustSub}>Tap or customize your institutional target:</Text>
+              </View>
             </View>
-            <View style={styles.targetGoalPill}>
-              <Text style={styles.targetGoalPillText}>{targetGoal}% Goal</Text>
+            <View style={styles.targetValueBadge}>
+              <MaterialCommunityIcons name="target" size={14} color="#D97706" />
+              <Text style={styles.targetValueBadgeText}>{targetGoal}%</Text>
             </View>
           </View>
 
-          <View style={styles.targetPillRow}>
+          <View style={styles.targetBtnRow}>
             {[65, 75, 80, 85, 90].map((goal) => {
               const isSelected = targetGoal === goal;
               return (
                 <TouchableOpacity
                   key={goal}
                   onPress={() => setTargetGoal(goal)}
-                  style={[styles.targetPillBtn, isSelected && styles.targetPillBtnActive]}
+                  style={[styles.targetChoiceBtn, isSelected && styles.targetChoiceBtnActive]}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.targetPillText, isSelected && styles.targetPillTextActive]}>
+                  <Text
+                    style={[
+                      styles.targetChoiceText,
+                      isSelected && styles.targetChoiceTextActive,
+                    ]}
+                  >
                     {goal}%
                   </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* QUICK DAY IMPACT ANALYZER PILL BAR */}
+        <View style={styles.quickDayCard}>
+          <View style={styles.quickDayHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="flash" size={15} color="#2563EB" />
+              <Text style={styles.quickDayTitle}>Daily Timetable Impact Analyzer</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setActiveTab('Target Planner')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.quickDayViewAll}>View Full Analysis</Text>
+              <Feather name="chevron-right" size={13} color="#2563EB" />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.quickDaySub}>
+            Click any day to see attendance gain if attended or loss if bunked:
+          </Text>
+          <View style={styles.quickDayBtnRow}>
+            {(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const).map((day) => {
+              const count = (timetable[day] || []).length;
+              return (
+                <TouchableOpacity
+                  key={day}
+                  onPress={() => {
+                    setAnalysisDay(day);
+                    setActiveTab('Target Planner');
+                  }}
+                  style={styles.quickDayBtn}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.quickDayBtnText}>{day}</Text>
+                  <Text style={styles.quickDayCountText}>{count} class</Text>
                 </TouchableOpacity>
               );
             })}
@@ -1176,7 +1171,7 @@ export default function AttendanceTrackerApp() {
           >
             <Ionicons
               name={activeTab === 'Classes' ? 'school' : 'school-outline'}
-              size={14}
+              size={15}
               color={activeTab === 'Classes' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Classes' && styles.tabButtonTextActive]}>
@@ -1191,26 +1186,11 @@ export default function AttendanceTrackerApp() {
           >
             <Feather
               name="calendar"
-              size={13}
+              size={14}
               color={activeTab === 'Schedule' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Schedule' && styles.tabButtonTextActive]}>
               Schedule
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setActiveTab('Impact')}
-            style={[styles.tabButton, activeTab === 'Impact' && styles.tabButtonActive]}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons
-              name="lightning-bolt"
-              size={14}
-              color={activeTab === 'Impact' ? '#FFFFFF' : '#64748B'}
-            />
-            <Text style={[styles.tabButtonText, activeTab === 'Impact' && styles.tabButtonTextActive]}>
-              Impact
             </Text>
           </TouchableOpacity>
 
@@ -1221,11 +1201,11 @@ export default function AttendanceTrackerApp() {
           >
             <MaterialCommunityIcons
               name="target"
-              size={14}
+              size={15}
               color={activeTab === 'Target Planner' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Target Planner' && styles.tabButtonTextActive]}>
-              Planner
+              Target Planner
             </Text>
           </TouchableOpacity>
 
@@ -1236,7 +1216,7 @@ export default function AttendanceTrackerApp() {
           >
             <Feather
               name="settings"
-              size={13}
+              size={14}
               color={activeTab === 'Manage' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Manage' && styles.tabButtonTextActive]}>
@@ -1259,11 +1239,10 @@ export default function AttendanceTrackerApp() {
               </TouchableOpacity>
             </View>
 
-            <View style={{ gap: 14 }}>
+            <View style={{ gap: 12 }}>
               {courses.map((course) => {
                 const subPct = course.total === 0 ? 0 : (course.present / course.total) * 100;
                 const isBelow = subPct < targetGoal && course.total > 0;
-                const advice = calculateGoalAdvice(course.present, course.total, targetGoal);
 
                 return (
                   <View key={course.id} style={[styles.courseCard, { borderLeftColor: course.color }]}>
@@ -1294,11 +1273,12 @@ export default function AttendanceTrackerApp() {
                           <Text
                             style={[
                               styles.coursePctText,
-                              { color: isBelow ? '#DC2626' : '#059669' },
+                              { color: isBelow ? '#EF4444' : '#059669' },
                             ]}
                           >
                             {subPct.toFixed(2)}%
                           </Text>
+                          <Feather name="chevron-right" size={16} color="#94A3B8" />
                         </View>
                         <TouchableOpacity
                           onPress={() => openCourseModal(course)}
@@ -1308,41 +1288,6 @@ export default function AttendanceTrackerApp() {
                           <Feather name="edit-2" size={13} color="#94A3B8" />
                         </TouchableOpacity>
                       </View>
-                    </View>
-
-                    {/* Visual Progress Bar */}
-                    <View style={styles.courseProgressTrack}>
-                      <View
-                        style={[
-                          styles.courseProgressFill,
-                          {
-                            width: `${Math.min(100, Math.max(0, subPct))}%`,
-                            backgroundColor: isBelow ? '#DC2626' : '#10B981',
-                          },
-                        ]}
-                      />
-                    </View>
-
-                    {/* Stats & Advice Row */}
-                    <View style={styles.courseAdviceRow}>
-                      <Text style={styles.courseRatioText}>
-                        {course.present} of {course.total} classes attended
-                      </Text>
-                      <Text
-                        style={[
-                          styles.courseAdvicePill,
-                          {
-                            color: isBelow ? '#DC2626' : '#059669',
-                            backgroundColor: isBelow ? '#FFF1F2' : '#ECFDF5',
-                          },
-                        ]}
-                      >
-                        {course.total === 0
-                          ? 'Not started'
-                          : advice.status === 'safe'
-                          ? `Safe: ${advice.count} bunks`
-                          : `Need: ${advice.count} in a row`}
-                      </Text>
                     </View>
 
                     {/* Stepper Controls */}
@@ -1355,7 +1300,7 @@ export default function AttendanceTrackerApp() {
                             style={styles.stepBtnMinus}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="remove" size={16} color="#64748B" />
+                            <Ionicons name="remove" size={14} color="#64748B" />
                           </TouchableOpacity>
                           <Text style={styles.stepNumberText}>{course.present}</Text>
                           <TouchableOpacity
@@ -1363,12 +1308,10 @@ export default function AttendanceTrackerApp() {
                             style={styles.stepBtnPlusPresent}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="add" size={18} color="#059669" />
+                            <Ionicons name="add" size={16} color="#059669" />
                           </TouchableOpacity>
                         </View>
                       </View>
-
-                      <View style={styles.stepperDivider} />
 
                       <View style={styles.stepperBox}>
                         <Text style={styles.stepperLabel}>Total Held</Text>
@@ -1378,7 +1321,7 @@ export default function AttendanceTrackerApp() {
                             style={styles.stepBtnMinus}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="remove" size={16} color="#64748B" />
+                            <Ionicons name="remove" size={14} color="#64748B" />
                           </TouchableOpacity>
                           <Text style={styles.stepNumberText}>{course.total}</Text>
                           <TouchableOpacity
@@ -1386,7 +1329,7 @@ export default function AttendanceTrackerApp() {
                             style={styles.stepBtnPlusTotal}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="add" size={18} color="#2563EB" />
+                            <Ionicons name="add" size={16} color="#2563EB" />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1606,23 +1549,28 @@ export default function AttendanceTrackerApp() {
                     </View>
                   ))
                 )}
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 6 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setAnalysisDay(selectedDay);
+                      setActiveTab('Target Planner');
+                    }}
+                    style={styles.scheduleAnalyzeBtn}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="calculator-outline" size={14} color="#FFFFFF" />
+                    <Text style={styles.scheduleAnalyzeBtnText}>
+                      Analyze {selectedDay} Impact
+                    </Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     onPress={() => openSlotModal()}
                     style={styles.scheduleAddPeriodBtn}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="add" size={16} color="#059669" />
+                    <Ionicons name="add" size={15} color="#059669" />
                     <Text style={styles.scheduleAddPeriodBtnText}>Add Period</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={handleSyncOfficialTimetable}
-                    style={styles.scheduleResetBtn}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="refresh" size={14} color="#475569" />
-                    <Text style={styles.scheduleResetBtnText}>Reset Timetable</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1630,478 +1578,346 @@ export default function AttendanceTrackerApp() {
           </View>
         )}
 
-        {/* TAB 3: IMPACT ANALYZER (TIMETABLE BASED) */}
-        {activeTab === 'Impact' && (
+        {/* TAB 3: TARGET PLANNER */}
+        {activeTab === 'Target Planner' && (
           <View style={styles.tabContentWrapper}>
-            {/* Header Title & Benchmark */}
-            <View style={styles.sectionHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <MaterialCommunityIcons name="lightning-bolt-circle" size={22} color="#2563EB" />
-                <Text style={styles.sectionTitle}>Timetable Impact Analyzer</Text>
+            {/* SECTION 1: TIMETABLE DAY-BY-DAY ATTENDANCE IMPACT ANALYZER */}
+            <View style={styles.analyzerContainer}>
+              <View style={styles.analyzerHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <View style={styles.analyzerIconOrb}>
+                    <MaterialCommunityIcons name="calculator-variant-outline" size={20} color="#2563EB" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.analyzerMainTitle}>Timetable Day Impact Analyzer</Text>
+                    <Text style={styles.analyzerSubtitle}>
+                      Select an individual day to analyze attendance gain or loss:
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.analyzerDayBadge}>
+                  <Text style={styles.analyzerDayBadgeText}>
+                    {analysisDay} • {dayAnalysis.classCount} Classes
+                  </Text>
+                </View>
               </View>
-              <View style={styles.impactCurrentBadge}>
-                <Text style={styles.impactCurrentBadgeText}>Now: {stats.presentPct.toFixed(2)}%</Text>
-              </View>
-            </View>
 
-            <Text style={styles.plannerSubText}>
-              Simulate overall attendance Gain & Loss based on scheduled classes in your official timetable.
-            </Text>
-
-            {/* Mode Switcher: Single Day vs Multi-Day Forecast */}
-            <View style={styles.impactModeRow}>
-              <TouchableOpacity
-                onPress={() => setImpactMode('single')}
-                style={[
-                  styles.impactModeBtn,
-                  impactMode === 'single' && styles.impactModeBtnActive,
-                ]}
-                activeOpacity={0.8}
-              >
-                <Feather
-                  name="calendar"
-                  size={14}
-                  color={impactMode === 'single' ? '#FFFFFF' : '#64748B'}
-                />
-                <Text
-                  style={[
-                    styles.impactModeText,
-                    impactMode === 'single' && styles.impactModeTextActive,
-                  ]}
-                >
-                  Specific Day Impact
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setImpactMode('multiday')}
-                style={[
-                  styles.impactModeBtn,
-                  impactMode === 'multiday' && styles.impactModeBtnActive,
-                ]}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons
-                  name="calendar-range"
-                  size={15}
-                  color={impactMode === 'multiday' ? '#FFFFFF' : '#64748B'}
-                />
-                <Text
-                  style={[
-                    styles.impactModeText,
-                    impactMode === 'multiday' && styles.impactModeTextActive,
-                  ]}
-                >
-                  Multi-Day Simulator
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Starting / Selected Day Picker */}
-            <View style={styles.impactDayPickerCard}>
-              <View style={styles.impactPickerHeader}>
-                <Text style={styles.impactPickerTitle}>
-                  {impactMode === 'single' ? 'Select Day to Analyze' : 'Start Forecasting From'}
-                </Text>
-                <Text style={styles.impactPickerSub}>
-                  {impactData.singleCount} lectures on {impactStartDay}
-                </Text>
-              </View>
-              <View style={styles.daySelectorRow}>
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => {
-                  const isDaySelected = impactStartDay === day;
-                  const dayClassCount = timetable[day]?.length || 0;
+              {/* Clickable Day Selector Pills */}
+              <View style={styles.analyzerDayRow}>
+                {(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const).map((day) => {
+                  const isDayActive = analysisDay === day;
+                  const count = (timetable[day] || []).length;
                   return (
                     <TouchableOpacity
                       key={day}
-                      onPress={() => setImpactStartDay(day)}
-                      style={[styles.dayChoiceBtn, isDaySelected && styles.dayChoiceBtnActive]}
+                      onPress={() => setAnalysisDay(day)}
+                      style={[styles.analyzerDayBtn, isDayActive && styles.analyzerDayBtnActive]}
                       activeOpacity={0.8}
                     >
-                      <Text
-                        style={[
-                          styles.dayChoiceText,
-                          isDaySelected && styles.dayChoiceTextActive,
-                        ]}
-                      >
+                      <Text style={[styles.analyzerDayBtnText, isDayActive && styles.analyzerDayBtnTextActive]}>
                         {day}
                       </Text>
-                      <Text
+                      <View
                         style={[
-                          styles.dayChoiceSubText,
-                          isDaySelected && styles.dayChoiceSubTextActive,
+                          styles.analyzerDayCountBadge,
+                          isDayActive && styles.analyzerDayCountBadgeActive,
                         ]}
                       >
-                        {dayClassCount}L
-                      </Text>
+                        <Text
+                          style={[
+                            styles.analyzerDayCountText,
+                            isDayActive && styles.analyzerDayCountTextActive,
+                          ]}
+                        >
+                          {count}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            </View>
 
-            {/* VIEW 1: SINGLE DAY IMPACT */}
-            {impactMode === 'single' && (
-              <View style={{ gap: 14 }}>
-                {/* Specific Day Card */}
-                <View style={styles.impactResultCard}>
-                  <View style={styles.impactResultTop}>
-                    <View>
-                      <Text style={styles.impactResultTitle}>{impactStartDay} Timetable</Text>
-                      <Text style={styles.impactResultSub}>
-                        {impactData.singleCount} lectures scheduled on this day
-                      </Text>
-                    </View>
-                    <View style={styles.impactLecturesPill}>
-                      <Ionicons name="school-outline" size={13} color="#2563EB" />
-                      <Text style={styles.impactLecturesPillText}>
-                        {impactData.singleCount} Classes
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Scheduled Subjects Chips */}
-                  <View style={styles.impactChipWrap}>
-                    {impactData.singleSlots.map((slot) => (
-                      <View key={slot.id} style={styles.impactSubjectChip}>
-                        <Text style={styles.impactSubjectChipText}>{slot.subject}</Text>
-                        <Text style={styles.impactSubjectChipTime}>{slot.time.split(' - ')[0]}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* Dual Projection: If Attend vs If Absent */}
-                  <View style={styles.impactDualRow}>
-                    {/* ATTEND ALL */}
-                    <View style={[styles.impactBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-                      <View style={styles.impactBoxHeader}>
-                        <Ionicons name="arrow-up-circle" size={16} color="#059669" />
-                        <Text style={[styles.impactBoxLabel, { color: '#059669' }]}>IF YOU ATTEND</Text>
-                      </View>
-                      <Text style={[styles.impactBoxValue, { color: '#059669' }]}>
-                        {impactData.singleAttendPct.toFixed(2)}%
-                      </Text>
-                      <View style={[styles.impactChangePill, { backgroundColor: '#DCFCE7' }]}>
-                        <Text style={[styles.impactChangeText, { color: '#15803D' }]}>
-                          +{impactData.singleGain.toFixed(2)}% Gain
-                        </Text>
-                      </View>
-                      <Text style={styles.impactBoxFootnote}>
-                        {impactData.singleAttendPct >= targetGoal
-                          ? `Above ${targetGoal}% goal`
-                          : `${(targetGoal - impactData.singleAttendPct).toFixed(2)}% below goal`}
-                      </Text>
-                    </View>
-
-                    {/* MISS ALL */}
-                    <View style={[styles.impactBox, { backgroundColor: '#FEF2F2', borderColor: '#FECDD3' }]}>
-                      <View style={styles.impactBoxHeader}>
-                        <Ionicons name="arrow-down-circle" size={16} color="#DC2626" />
-                        <Text style={[styles.impactBoxLabel, { color: '#DC2626' }]}>IF YOU ARE ABSENT</Text>
-                      </View>
-                      <Text style={[styles.impactBoxValue, { color: '#DC2626' }]}>
-                        {impactData.singleAbsentPct.toFixed(2)}%
-                      </Text>
-                      <View style={[styles.impactChangePill, { backgroundColor: '#FEE2E2' }]}>
-                        <Text style={[styles.impactChangeText, { color: '#B91C1C' }]}>
-                          -{impactData.singleLoss.toFixed(2)}% Loss
-                        </Text>
-                      </View>
-                      <Text style={styles.impactBoxFootnote}>
-                        {impactData.singleAbsentPct >= targetGoal
-                          ? `Still above ${targetGoal}% goal`
-                          : `Falls ${(targetGoal - impactData.singleAbsentPct).toFixed(2)}% short`}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* VIEW 2: MULTI-DAY FORECAST (e.g. 6 Days) */}
-            {impactMode === 'multiday' && (
-              <View style={{ gap: 14 }}>
-                {/* Number of Days Input Card */}
-                <View style={styles.multiInputCard}>
-                  <Text style={styles.multiInputTitle}>Enter Number of Days to Forecast</Text>
-                  <Text style={styles.multiInputSub}>
-                    Calculates cumulative gain & loss for the next scheduled days in your timetable
+              {/* ANALYSIS FOR SELECTED DAY */}
+              {dayAnalysis.classCount === 0 ? (
+                <View style={styles.analyzerEmptyCard}>
+                  <Feather name="coffee" size={30} color="#94A3B8" />
+                  <Text style={styles.analyzerEmptyTitle}>No classes scheduled on {analysisDay}</Text>
+                  <Text style={styles.analyzerEmptySub}>
+                    Your attendance percentage will remain unaffected on this day.
                   </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 12 }}>
+                  {/* 2 Big Impact Comparison Cards: Attend All vs Bunk All */}
+                  <View style={styles.impactComparisonRow}>
+                    {/* CARD A: IF YOU ATTEND ALL */}
+                    <View style={styles.impactCardAttend}>
+                      <View style={styles.impactCardHeader}>
+                        <View style={styles.impactBadgeGreen}>
+                          <Ionicons name="trending-up" size={13} color="#059669" />
+                          <Text style={styles.impactBadgeGreenText}>IF ATTENDED</Text>
+                        </View>
+                        <Text style={styles.impactSubCount}>+{dayAnalysis.classCount} classes</Text>
+                      </View>
+                      <Text style={styles.impactDeltaGreen}>
+                        +{dayAnalysis.attendAll.delta.toFixed(2)}%
+                      </Text>
+                      <Text style={styles.impactProjectedText}>
+                        New Overall:{' '}
+                        <Text style={{ fontWeight: '800', color: '#059669' }}>
+                          {dayAnalysis.attendAll.newPct.toFixed(2)}%
+                        </Text>
+                      </Text>
+                      <Text style={styles.impactStatusGreen}>
+                        {dayAnalysis.attendAll.newPct >= targetGoal
+                          ? 'Above target goal'
+                          : `Needs ${(targetGoal - dayAnalysis.attendAll.newPct).toFixed(2)}% more`}
+                      </Text>
+                    </View>
 
-                  {/* Stepper + Input */}
-                  <View style={styles.multiInputRow}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        const current = parseInt(impactDaysInput, 10) || 1;
-                        if (current > 1) setImpactDaysInput(String(current - 1));
-                      }}
-                      style={styles.stepBtnMinus}
-                      activeOpacity={0.8}
-                    >
-                      <Feather name="minus" size={16} color="#475569" />
-                    </TouchableOpacity>
+                    {/* CARD B: IF YOU BUNK ALL */}
+                    <View style={styles.impactCardBunk}>
+                      <View style={styles.impactCardHeader}>
+                        <View style={styles.impactBadgeRed}>
+                          <Ionicons name="trending-down" size={13} color="#DC2626" />
+                          <Text style={styles.impactBadgeRedText}>IF BUNKED</Text>
+                        </View>
+                        <Text style={styles.impactSubCount}>-{dayAnalysis.classCount} classes</Text>
+                      </View>
+                      <Text style={styles.impactDeltaRed}>
+                        {dayAnalysis.bunkAll.delta.toFixed(2)}%
+                      </Text>
+                      <Text style={styles.impactProjectedText}>
+                        New Overall:{' '}
+                        <Text style={{ fontWeight: '800', color: '#DC2626' }}>
+                          {dayAnalysis.bunkAll.newPct.toFixed(2)}%
+                        </Text>
+                      </Text>
+                      <Text style={styles.impactStatusRed}>
+                        {dayAnalysis.bunkAll.newPct < targetGoal
+                          ? `Drops ${(targetGoal - dayAnalysis.bunkAll.newPct).toFixed(2)}% below target!`
+                          : 'Stays safe above target'}
+                      </Text>
+                    </View>
+                  </View>
 
-                    <TextInput
-                      style={styles.multiTextInput}
-                      keyboardType="numeric"
-                      value={impactDaysInput}
-                      onChangeText={(val) => {
-                        const num = val.replace(/[^0-9]/g, '');
-                        setImpactDaysInput(num);
-                      }}
-                      placeholder="6"
-                      placeholderTextColor="#94A3B8"
+                  {/* Safety Verdict Alert Banner */}
+                  <View
+                    style={[
+                      styles.verdictBanner,
+                      {
+                        backgroundColor:
+                          dayAnalysis.bunkAll.newPct >= targetGoal ? '#ECFDF5' : '#FFF1F2',
+                        borderColor:
+                          dayAnalysis.bunkAll.newPct >= targetGoal ? '#A7F3D0' : '#FECDD3',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={dayAnalysis.bunkAll.newPct >= targetGoal ? 'shield-checkmark' : 'alert-circle'}
+                      size={18}
+                      color={dayAnalysis.bunkAll.newPct >= targetGoal ? '#059669' : '#E11D48'}
                     />
+                    <Text style={styles.verdictBannerText}>
+                      {dayAnalysis.bunkAll.newPct >= targetGoal ? (
+                        <>
+                          <Text style={{ fontWeight: '800', color: '#059669' }}>
+                            Safe to Bunk {analysisDay}? YES.{' '}
+                          </Text>
+                          Even if you bunk all {dayAnalysis.classCount} classes, overall attendance will remain at{' '}
+                          <Text style={{ fontWeight: '800' }}>{dayAnalysis.bunkAll.newPct.toFixed(2)}%</Text>{' '}
+                          (above {targetGoal}% target).
+                        </>
+                      ) : (
+                        <>
+                          <Text style={{ fontWeight: '800', color: '#E11D48' }}>
+                            Safe to Bunk {analysisDay}? NO.{' '}
+                          </Text>
+                          Bunking all {dayAnalysis.classCount} classes drops your attendance to{' '}
+                          <Text style={{ fontWeight: '800' }}>{dayAnalysis.bunkAll.newPct.toFixed(2)}%</Text>, falling{' '}
+                          <Text style={{ fontWeight: '800' }}>
+                            {(targetGoal - dayAnalysis.bunkAll.newPct).toFixed(2)}%
+                          </Text>{' '}
+                          below your institutional target!
+                        </>
+                      )}
+                    </Text>
+                  </View>
 
+                  {/* Interactive Lecture-by-Lecture Breakdown & Simulation */}
+                  <View style={styles.simCardContainer}>
+                    <View style={styles.simCardHeader}>
+                      <View style={{ flex: 1, paddingRight: 6 }}>
+                        <Text style={styles.simCardTitle}>Individual Period Impact Breakdown</Text>
+                        <Text style={styles.simCardSub}>
+                          Tap each lecture to simulate attending vs bunking:
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => setAllSlotsSimulation('attend')}
+                          style={styles.simPresetBtnAttend}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.simPresetBtnAttendText}>Attend All</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setAllSlotsSimulation('bunk')}
+                          style={styles.simPresetBtnBunk}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.simPresetBtnBunkText}>Bunk All</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Live Simulation Projection Bar */}
+                    <View style={styles.simLiveBar}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="analytics" size={15} color="#2563EB" />
+                        <Text style={styles.simLiveBarText}>
+                          Simulated: {dayAnalysis.customSim.attendCount}/{dayAnalysis.classCount} Attended
+                        </Text>
+                      </View>
+                      <Text style={styles.simLiveBarPct}>
+                        Overall: {dayAnalysis.customSim.newPct.toFixed(2)}% (
+                        {dayAnalysis.customSim.delta >= 0 ? '+' : ''}
+                        {dayAnalysis.customSim.delta.toFixed(2)}%)
+                      </Text>
+                    </View>
+
+                    {/* Class Slots List */}
+                    <View style={{ gap: 8, marginTop: 10 }}>
+                      {dayAnalysis.slotBreakdown.map((item, idx) => {
+                        const isAttending = item.isAttended;
+                        return (
+                          <View key={item.slot.id || idx} style={styles.simSlotRow}>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={styles.simSlotTimeBadge}>
+                                  <Ionicons name="time-outline" size={11} color="#64748B" />
+                                  <Text style={styles.simSlotTimeText}>{item.slot.time}</Text>
+                                </View>
+                                <View style={styles.simSlotTypeBadge}>
+                                  <Text style={styles.simSlotTypeBadgeText}>{item.slot.type}</Text>
+                                </View>
+                              </View>
+
+                              <Text style={styles.simSlotSubject}>{item.slot.subject}</Text>
+
+                              {item.matchedCourse ? (
+                                <View style={styles.simImpactRow}>
+                                  <Text style={styles.simImpactCurr}>
+                                    Curr: {item.currentSubPct.toFixed(2)}%
+                                  </Text>
+                                  <Text style={styles.simImpactSep}>•</Text>
+                                  <Text
+                                    style={[
+                                      styles.simImpactDelta,
+                                      { color: isAttending ? '#059669' : '#DC2626' },
+                                    ]}
+                                  >
+                                    {isAttending
+                                      ? `Attend: ${item.attendSubPct.toFixed(2)}% (+${item.attendSubDelta.toFixed(2)}%)`
+                                      : `Bunk: ${item.bunkSubPct.toFixed(2)}% (${item.bunkSubDelta.toFixed(2)}%)`}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.simUnmatchedText}>
+                                  {item.slot.room || 'General lecture'}
+                                </Text>
+                              )}
+                            </View>
+
+                            {/* Toggle Button */}
+                            <TouchableOpacity
+                              onPress={() => toggleSlotSimulation(item.slot.id)}
+                              style={[
+                                styles.simToggleBtn,
+                                isAttending ? styles.simToggleBtnAttend : styles.simToggleBtnBunk,
+                              ]}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons
+                                name={isAttending ? 'checkmark-circle' : 'close-circle'}
+                                size={14}
+                                color={isAttending ? '#059669' : '#DC2626'}
+                              />
+                              <Text
+                                style={[
+                                  styles.simToggleBtnText,
+                                  isAttending
+                                    ? styles.simToggleBtnTextAttend
+                                    : styles.simToggleBtnTextBunk,
+                                ]}
+                              >
+                                {isAttending ? 'Attend' : 'Bunk'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* Action Button: Apply to Tracker */}
                     <TouchableOpacity
-                      onPress={() => {
-                        const current = parseInt(impactDaysInput, 10) || 1;
-                        if (current < 30) setImpactDaysInput(String(current + 1));
-                      }}
-                      style={styles.stepBtnPlusTotal}
+                      onPress={handleApplyDayAttendance}
+                      style={styles.simApplyBtn}
                       activeOpacity={0.8}
                     >
-                      <Feather name="plus" size={16} color="#2563EB" />
+                      <Ionicons name="checkbox-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.simApplyBtnText}>
+                        Apply {analysisDay} Plan to Tracker
+                      </Text>
                     </TouchableOpacity>
                   </View>
-
-                  {/* Quick Preset Buttons */}
-                  <View style={styles.quickPresetRow}>
-                    {['1', '3', '6', '12'].map((preset) => (
-                      <TouchableOpacity
-                        key={preset}
-                        onPress={() => setImpactDaysInput(preset)}
-                        style={[
-                          styles.quickPresetBtn,
-                          impactDaysInput === preset && styles.quickPresetBtnActive,
-                        ]}
-                        activeOpacity={0.8}
-                      >
-                        <Text
-                          style={[
-                            styles.quickPresetText,
-                            impactDaysInput === preset && styles.quickPresetTextActive,
-                          ]}
-                        >
-                          {preset} {preset === '1' ? 'Day' : preset === '6' ? 'Days (1 Wk)' : preset === '12' ? 'Days (2 Wks)' : 'Days'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
                 </View>
+              )}
+            </View>
 
-                {/* Multi-Day Overall Result Card */}
-                <View style={styles.impactResultCard}>
-                  <View style={styles.impactResultTop}>
-                    <View>
-                      <Text style={styles.impactResultTitle}>
-                        Next {impactData.parsedDays} Days Forecast
-                      </Text>
-                      <Text style={styles.impactResultSub}>
-                        Starting {impactStartDay} • {impactData.totalMultiLectures} total timetable lectures
-                      </Text>
-                    </View>
-                    <View style={styles.impactLecturesPill}>
-                      <MaterialCommunityIcons name="counter" size={14} color="#2563EB" />
-                      <Text style={styles.impactLecturesPillText}>
-                        {impactData.totalMultiLectures} Lectures
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Dual Multi-Day Projection Cards */}
-                  <View style={styles.impactDualRow}>
-                    {/* IF 100% ATTENDED OVER N DAYS */}
-                    <View style={[styles.impactBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-                      <View style={styles.impactBoxHeader}>
-                        <Ionicons name="arrow-up-circle" size={16} color="#059669" />
-                        <Text style={[styles.impactBoxLabel, { color: '#059669' }]}>
-                          ATTEND ALL {impactData.parsedDays}D
-                        </Text>
-                      </View>
-                      <Text style={[styles.impactBoxValue, { color: '#059669' }]}>
-                        {impactData.multiAttendPct.toFixed(2)}%
-                      </Text>
-                      <View style={[styles.impactChangePill, { backgroundColor: '#DCFCE7' }]}>
-                        <Text style={[styles.impactChangeText, { color: '#15803D' }]}>
-                          +{impactData.multiGain.toFixed(2)}% Gain
-                        </Text>
-                      </View>
-                      <Text style={styles.impactBoxFootnote}>
-                        {impactData.multiAttendPct >= targetGoal
-                          ? `Safely above ${targetGoal}% goal`
-                          : `Reaches ${(targetGoal - impactData.multiAttendPct).toFixed(2)}% deficit`}
-                      </Text>
-                    </View>
-
-                    {/* IF 100% ABSENT OVER N DAYS */}
-                    <View style={[styles.impactBox, { backgroundColor: '#FEF2F2', borderColor: '#FECDD3' }]}>
-                      <View style={styles.impactBoxHeader}>
-                        <Ionicons name="arrow-down-circle" size={16} color="#DC2626" />
-                        <Text style={[styles.impactBoxLabel, { color: '#DC2626' }]}>
-                          ABSENT ALL {impactData.parsedDays}D
-                        </Text>
-                      </View>
-                      <Text style={[styles.impactBoxValue, { color: '#DC2626' }]}>
-                        {impactData.multiAbsentPct.toFixed(2)}%
-                      </Text>
-                      <View style={[styles.impactChangePill, { backgroundColor: '#FEE2E2' }]}>
-                        <Text style={[styles.impactChangeText, { color: '#B91C1C' }]}>
-                          -{impactData.multiLoss.toFixed(2)}% Loss
-                        </Text>
-                      </View>
-                      <Text style={styles.impactBoxFootnote}>
-                        {impactData.multiAbsentPct >= targetGoal
-                          ? `Still maintains ${targetGoal}%`
-                          : `Drops ${(targetGoal - impactData.multiAbsentPct).toFixed(2)}% below goal`}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Day-by-Day Sequence Breakdown */}
-                <View style={styles.breakdownContainer}>
-                  <Text style={styles.breakdownHeaderTitle}>
-                    Day-by-Day Timetable Progression
-                  </Text>
-                  {impactData.dayBreakdown.map((item) => (
-                    <View key={`${item.dayIndex}-${item.dayName}`} style={styles.breakdownRowCard}>
-                      <View style={styles.breakdownRowTop}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <View style={styles.breakdownDayBadge}>
-                            <Text style={styles.breakdownDayBadgeText}>D{item.dayIndex}</Text>
-                          </View>
-                          <Text style={styles.breakdownDayName}>{item.dayName}</Text>
-                          <Text style={styles.breakdownLectureCount}>
-                            ({item.slotsCount} lectures)
-                          </Text>
-                        </View>
-                        <Text style={styles.breakdownSubjectsText} numberOfLines={1}>
-                          {item.subjects.join(', ')}
-                        </Text>
-                      </View>
-
-                      <View style={styles.breakdownMetricsRow}>
-                        <View style={styles.breakdownMetricCol}>
-                          <Text style={styles.breakdownMetricSub}>If Attended</Text>
-                          <Text style={[styles.breakdownMetricVal, { color: '#059669' }]}>
-                            {item.attendPct.toFixed(2)}%
-                          </Text>
-                          <Text style={[styles.breakdownDiffText, { color: '#059669' }]}>
-                            +{item.gainPct.toFixed(2)}%
-                          </Text>
-                        </View>
-
-                        <View style={styles.overviewMetricDivider} />
-
-                        <View style={styles.breakdownMetricCol}>
-                          <Text style={styles.breakdownMetricSub}>If Absent</Text>
-                          <Text style={[styles.breakdownMetricVal, { color: '#DC2626' }]}>
-                            {item.absentPct.toFixed(2)}%
-                          </Text>
-                          <Text style={[styles.breakdownDiffText, { color: '#DC2626' }]}>
-                            -{item.lossPct.toFixed(2)}%
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* TAB 4: TARGET PLANNER */}
-        {activeTab === 'Target Planner' && (
-          <View style={styles.tabContentWrapper}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <MaterialCommunityIcons name="shield-airplane-outline" size={20} color="#2563EB" />
-                <Text style={styles.sectionTitle}>Safe Bunk & Attendance Recovery</Text>
-              </View>
-              <View style={styles.plannerGoalBadge}>
-                <Text style={styles.plannerGoalBadgeText}>Target: {targetGoal}%</Text>
+            {/* SECTION 2: SAFE BUNK & RECOVERY PER SUBJECT */}
+            <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="shield-airplane-outline" size={18} color="#3778D5" />
+                <Text style={styles.sectionTitle}>Safe Bunk & Attendance Recovery per Subject</Text>
               </View>
             </View>
-            <Text style={styles.plannerSubText}>
-              Per-subject safety buffer and continuous lectures required to maintain your institutional goal.
-            </Text>
 
-            <View style={{ gap: 12, marginTop: 12 }}>
-              {courses.map((course) => {
-                const advice = calculateGoalAdvice(course.present, course.total, targetGoal);
-                const pct = course.total === 0 ? 0 : (course.present / course.total) * 100;
+            {courses.map((course) => {
+              const advice = calculateGoalAdvice(course.present, course.total, targetGoal);
+              const pct = course.total === 0 ? 0 : (course.present / course.total) * 100;
 
-                return (
-                  <View key={course.id} style={styles.plannerCard}>
-                    <View style={styles.plannerCardTop}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <View style={[styles.plannerDot, { backgroundColor: course.color || '#2563EB' }]} />
-                        <Text style={styles.plannerSubjectName}>{course.name}</Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.plannerPctText,
-                          { color: pct >= targetGoal ? '#059669' : '#DC2626' },
-                        ]}
-                      >
-                        {pct.toFixed(2)}%
-                      </Text>
-                    </View>
-
-                    <Text style={styles.plannerRatioText}>
-                      {course.present} of {course.total} classes attended
-                    </Text>
-
-                    <View
+              return (
+                <View key={course.id} style={styles.plannerCard}>
+                  <View style={styles.plannerCardTop}>
+                    <Text style={styles.plannerSubjectName}>{course.name}</Text>
+                    <Text
                       style={[
-                        styles.plannerAdviceBox,
-                        {
-                          backgroundColor:
-                            course.total === 0
-                              ? '#F8FAFC'
-                              : advice.status === 'safe'
-                              ? '#ECFDF5'
-                              : '#FFF1F2',
-                          borderColor:
-                            course.total === 0
-                              ? '#E2E8F0'
-                              : advice.status === 'safe'
-                              ? '#A7F3D0'
-                              : '#FECDD3',
-                        },
+                        styles.plannerPctText,
+                        { color: pct >= targetGoal ? '#18A77A' : '#E45C70' },
                       ]}
                     >
-                      <FontAwesome5
-                        name={advice.status === 'safe' ? 'umbrella-beach' : 'running'}
-                        size={13}
-                        color={advice.status === 'safe' ? '#059669' : '#DC2626'}
-                      />
-                      <Text
-                        style={[
-                          styles.plannerAdviceText,
-                          {
-                            color:
-                              course.total === 0
-                                ? '#64748B'
-                                : advice.status === 'safe'
-                                ? '#065F46'
-                                : '#9F1239',
-                          },
-                        ]}
-                      >
-                        {course.total === 0
-                          ? 'No class attendance marked yet.'
-                          : advice.status === 'safe'
-                          ? `Safe Zone: You can safely bunk next ${advice.count} class(es).`
-                          : `Shortage Alert: Must attend next ${advice.count} lecture(s) in a row.`}
-                      </Text>
-                    </View>
+                      {pct.toFixed(2)}%
+                    </Text>
                   </View>
-                );
-              })}
-            </View>
+
+                  <View style={styles.plannerAdviceBox}>
+                    <FontAwesome5
+                      name={advice.status === 'safe' ? 'umbrella-beach' : 'running'}
+                      size={13}
+                      color={advice.status === 'safe' ? '#18A77A' : '#E45C70'}
+                    />
+                    <Text style={styles.plannerAdviceText}>
+                      {course.total === 0
+                        ? 'No class attendance marked yet.'
+                        : advice.status === 'safe'
+                        ? `Safe Zone: You can safely bunk ${advice.count} more class(es).`
+                        : `Shortage Alert: Must attend next ${advice.count} lecture(s) continuously.`}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -2492,228 +2308,254 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
     backgroundColor: '#EF4444',
   },
-  overviewHeroCard: {
+  profileBanner: {
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
-    padding: 18,
+    padding: 16,
     marginHorizontal: 16,
-    marginTop: -24,
+    marginTop: -28,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.08,
     shadowRadius: 16,
     elevation: 4,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
-  overviewTopRow: {
+  profileBannerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 6,
   },
-  overviewCardLabel: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  overviewCardSub: {
-    color: '#64748B',
-    fontSize: 11.5,
-    marginTop: 3,
-    fontWeight: '500',
-  },
-  twinPillRow: {
+  verifiedTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 14,
-  },
-  twinStatCard: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
     borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
   },
-  twinStatTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  twinStatLabel: {
-    color: '#2563EB',
-    fontSize: 10.5,
+  verifiedTagText: {
+    color: '#059669',
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  twinBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+  editBioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  twinBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  twinStatValue: {
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-    marginVertical: 2,
-  },
-  twinStatCaption: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  overviewBigPct: {
-    fontSize: 34,
-    fontWeight: '900',
-    marginTop: 4,
-    letterSpacing: -0.5,
-  },
-  overviewGoalTag: {
-    backgroundColor: '#EFF6FF',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  overviewGoalTagText: {
+  editBioBtnText: {
     color: '#2563EB',
-    fontSize: 10.5,
+    fontSize: 12,
     fontWeight: '700',
   },
-  overviewStatusBanner: {
+  collegeBuildingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  collegeBuildingBadge: {
+    width: 72,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  collegeText: {
+    color: '#0F172A',
+    fontSize: 15.5,
+    fontWeight: '800',
+    lineHeight: 21,
+  },
+  degreeText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 3,
+  },
+  targetStatusBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderRadius: 14,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 10,
-    marginTop: 14,
+    marginTop: 12,
     borderWidth: 1,
   },
-  overviewStatusIconWrap: {
+  alertIconCircle: {
     width: 24,
     height: 24,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  overviewStatusText: {
+  alertExclamationMark: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  targetStatusBoxText: {
     flex: 1,
     color: '#334155',
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 16,
   },
-  overviewMetricsRow: {
+  kpiGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
+    marginHorizontal: 16,
+    marginTop: 12,
+    gap: 10,
+  },
+  kpiCard: {
+    width: '48.5%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 13,
+    borderWidth: 1,
     borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  overviewMetricCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  overviewMetricLabel: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  overviewMetricValRow: {
+  kpiHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
-  overviewMetricVal: {
-    fontSize: 18,
+  kpiLabel: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  kpiBodyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  kpiValue: {
+    fontSize: 22,
     fontWeight: '900',
   },
-  overviewMetricDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#E2E8F0',
+  kpiSubText: {
+    color: '#64748B',
+    fontSize: 10.5,
+    fontWeight: '500',
+    marginTop: 2,
   },
-  targetBarCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
+  kpiAttendedIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  kpiAttendedInnerBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    backgroundColor: '#F59E0B',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  kpiMissedIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFE4E6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  kpiMissedInnerBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    backgroundColor: '#F43F5E',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  targetAdjustCard: {
     marginHorizontal: 16,
     marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 20,
+    padding: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#4338CA',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 4,
   },
-  targetBarHeader: {
+  targetAdjustHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  targetBarTitle: {
-    color: '#0F172A',
-    fontSize: 13.5,
+  targetAdjustTitle: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
     fontWeight: '800',
   },
-  targetGoalPill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  targetGoalPillText: {
-    color: '#2563EB',
+  targetAdjustSub: {
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 11,
-    fontWeight: '800',
+    marginTop: 2,
   },
-  targetPillRow: {
+  targetValueBadge: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  targetValueBadgeText: {
+    color: '#D97706',
+    fontWeight: '900',
+    fontSize: 12.5,
+  },
+  targetBtnRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 7,
+    marginTop: 14,
   },
-  targetPillBtn: {
+  targetChoiceBtn: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     borderRadius: 12,
-    paddingVertical: 9,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
-  targetPillBtnActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-    shadowColor: '#2563EB',
+  targetChoiceBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
-  targetPillText: {
-    color: '#64748B',
-    fontSize: 12,
+  targetChoiceText: {
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontSize: 12.5,
     fontWeight: '700',
   },
-  targetPillTextActive: {
-    color: '#FFFFFF',
+  targetChoiceTextActive: {
+    color: '#4338CA',
     fontWeight: '900',
   },
   tabContainer: {
@@ -2722,7 +2564,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: 3,
+    padding: 4,
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
@@ -2734,13 +2576,11 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   tabButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3.5,
-    paddingVertical: 7.5,
-    paddingHorizontal: 2,
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: 18,
   },
   tabButtonActive: {
@@ -2753,8 +2593,8 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     color: '#64748B',
-    fontSize: 10.8,
-    fontWeight: '700',
+    fontSize: 11.5,
+    fontWeight: '600',
   },
   tabButtonTextActive: {
     color: '#FFFFFF',
@@ -2851,105 +2691,80 @@ const styles = StyleSheet.create({
   cardEditIconBtn: {
     padding: 3,
   },
-  courseProgressTrack: {
+  progressTrack: {
     height: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#EEF3F8',
     borderRadius: 3,
-    marginTop: 10,
-    marginBottom: 8,
+    marginVertical: 12,
     overflow: 'hidden',
   },
-  courseProgressFill: {
+  progressFill: {
     height: '100%',
     borderRadius: 3,
-  },
-  courseAdviceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  courseRatioText: {
-    color: '#64748B',
-    fontSize: 11.5,
-    fontWeight: '600',
-  },
-  courseAdvicePill: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-    overflow: 'hidden',
   },
   stepperContainer: {
     backgroundColor: '#F8FAFC',
     borderRadius: 14,
-    padding: 8,
-    marginTop: 4,
+    padding: 7,
+    marginTop: 12,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    gap: 8,
   },
   stepperBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 4,
   },
   stepperLabel: {
-    color: '#475569',
+    color: '#64748B',
     fontSize: 11.5,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   stepperActionGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  stepperDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: '#E2E8F0',
+    gap: 6,
   },
   stepBtnMinus: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepBtnPlusPresent: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#DCFCE7',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: '#D1FAE5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepBtnPlusTotal: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
     backgroundColor: '#DBEAFE',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepBtnPlus: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: '#D1FAE5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepNumberText: {
     color: '#0F172A',
-    fontSize: 14.5,
+    fontSize: 13.5,
     fontWeight: '800',
-    minWidth: 22,
+    minWidth: 16,
     textAlign: 'center',
   },
   daySelectorRow: {
@@ -3065,55 +2880,41 @@ const styles = StyleSheet.create({
   },
   plannerCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: '#E2E8F0',
   },
   plannerCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   plannerSubjectName: {
-    color: '#0F172A',
-    fontSize: 14,
-    fontWeight: '800',
+    color: '#172033',
+    fontSize: 13.5,
+    fontWeight: '700',
     flex: 1,
   },
   plannerPctText: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '900',
     marginLeft: 8,
-  },
-  plannerRatioText: {
-    color: '#64748B',
-    fontSize: 11.5,
-    fontWeight: '600',
-    marginBottom: 8,
   },
   plannerAdviceBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    backgroundColor: '#F4F7FB',
+    borderRadius: 8,
+    padding: 8,
   },
   plannerAdviceText: {
     flex: 1,
-    color: '#334155',
-    fontSize: 11.5,
+    color: '#45546A',
+    fontSize: 11,
     fontWeight: '600',
-    lineHeight: 16,
   },
   manageCardRow: {
     backgroundColor: '#FFFFFF',
@@ -3290,24 +3091,9 @@ const styles = StyleSheet.create({
   },
   timetableBadgeRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  verifiedTag: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 14,
-  },
-  verifiedTagText: {
-    color: '#059669',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    marginBottom: 12,
   },
   expandIconBtn: {
     flexDirection: 'row',
@@ -3458,270 +3244,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
-  // Schedule Tab Buttons
-  scheduleAddPeriodBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 12,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  scheduleAddPeriodBtnText: {
-    color: '#059669',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  scheduleResetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 12,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  scheduleResetBtnText: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  // Target Planner Styles
-  plannerGoalBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  plannerGoalBadgeText: {
-    color: '#2563EB',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  plannerSubText: {
-    color: '#64748B',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 2,
-    marginBottom: 4,
-  },
-  plannerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  // Timetable Impact Analyzer Styles
-  impactCurrentBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  impactCurrentBadgeText: {
-    color: '#2563EB',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  impactModeRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    padding: 3,
-    marginTop: 12,
-    gap: 4,
-  },
-  impactModeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 11,
-  },
-  impactModeBtnActive: {
-    backgroundColor: '#2563EB',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  impactModeText: {
-    color: '#64748B',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  impactModeTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  impactDayPickerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  impactPickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  impactPickerTitle: {
-    color: '#0F172A',
-    fontSize: 12.5,
-    fontWeight: '800',
-  },
-  impactPickerSub: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  dayChoiceSubText: {
-    color: '#94A3B8',
-    fontSize: 9.5,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  dayChoiceSubTextActive: {
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  impactResultCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  impactResultTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  impactResultTitle: {
-    color: '#0F172A',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  impactResultSub: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  impactLecturesPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  impactLecturesPillText: {
-    color: '#2563EB',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  impactChipWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
-  },
-  impactSubjectChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  impactSubjectChipText: {
-    color: '#1E293B',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  impactSubjectChipTime: {
-    color: '#64748B',
-    fontSize: 9.5,
-    fontWeight: '500',
-  },
-  impactDualRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  impactBox: {
-    flex: 1,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-  },
-  impactBoxHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 6,
-  },
-  impactBoxLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  impactBoxValue: {
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
-  impactChangePill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-    marginVertical: 4,
-  },
-  impactChangeText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  impactBoxFootnote: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  multiInputCard: {
+  // Day Impact Analyzer Quick Bar
+  quickDayCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
     borderWidth: 1,
     borderColor: '#F1F5F9',
     shadowColor: '#0F172A',
@@ -3730,42 +3259,33 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  multiInputTitle: {
+  quickDayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickDayTitle: {
     color: '#0F172A',
     fontSize: 13.5,
     fontWeight: '800',
   },
-  multiInputSub: {
+  quickDayViewAll: {
+    color: '#2563EB',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  quickDaySub: {
     color: '#64748B',
     fontSize: 11,
-    marginTop: 2,
+    marginTop: 3,
     marginBottom: 10,
   },
-  multiInputRow: {
+  quickDayBtnRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  multiTextInput: {
-    width: 80,
-    height: 42,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#2563EB',
-    borderRadius: 12,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  quickPresetRow: {
-    flexDirection: 'row',
-    gap: 6,
     justifyContent: 'space-between',
+    gap: 6,
   },
-  quickPresetBtn: {
+  quickDayBtn: {
     flex: 1,
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
@@ -3774,98 +3294,444 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  quickPresetBtnActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
-  },
-  quickPresetText: {
-    color: '#64748B',
-    fontSize: 10.5,
-    fontWeight: '700',
-  },
-  quickPresetTextActive: {
-    color: '#2563EB',
-    fontWeight: '900',
-  },
-  breakdownContainer: {
-    marginTop: 4,
-    gap: 8,
-  },
-  breakdownHeaderTitle: {
+  quickDayBtnText: {
     color: '#0F172A',
-    fontSize: 13.5,
+    fontSize: 11.5,
     fontWeight: '800',
-    marginBottom: 4,
   },
-  breakdownRowCard: {
+  quickDayCountText: {
+    color: '#64748B',
+    fontSize: 9.5,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  // Schedule Tab Buttons
+  scheduleAnalyzeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 5,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  scheduleAnalyzeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  scheduleAddPeriodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  scheduleAddPeriodBtnText: {
+    color: '#059669',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  // Day-by-Day Impact Analyzer Main Container
+  analyzerContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 5,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+    marginBottom: 16,
   },
-  breakdownRowTop: {
-    marginBottom: 8,
+  analyzerHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  breakdownDayBadge: {
+  analyzerIconOrb: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: '#EFF6FF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  analyzerMainTitle: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  analyzerSubtitle: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  analyzerDayBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#DBEAFE',
   },
-  breakdownDayBadgeText: {
+  analyzerDayBadgeText: {
     color: '#2563EB',
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  analyzerDayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 14,
+  },
+  analyzerDayBtn: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 3,
+  },
+  analyzerDayBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  analyzerDayBtnText: {
+    color: '#64748B',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  analyzerDayBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  analyzerDayCountBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  analyzerDayCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  analyzerDayCountText: {
+    color: '#64748B',
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  analyzerDayCountTextActive: {
+    color: '#FFFFFF',
+  },
+  analyzerEmptyCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 24,
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  analyzerEmptyTitle: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  analyzerEmptySub: {
+    color: '#64748B',
+    fontSize: 11.5,
+    textAlign: 'center',
+  },
+  impactComparisonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  impactCardAttend: {
+    flex: 1,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  impactCardBunk: {
+    flex: 1,
+    backgroundColor: '#FFF1F2',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  impactCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  impactBadgeGreen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  impactBadgeGreenText: {
+    color: '#059669',
+    fontSize: 9.5,
     fontWeight: '900',
   },
-  breakdownDayName: {
+  impactBadgeRed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  impactBadgeRedText: {
+    color: '#DC2626',
+    fontSize: 9.5,
+    fontWeight: '900',
+  },
+  impactSubCount: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  impactDeltaGreen: {
+    color: '#059669',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  impactDeltaRed: {
+    color: '#DC2626',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  impactProjectedText: {
+    color: '#334155',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  impactStatusGreen: {
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  impactStatusRed: {
+    color: '#DC2626',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  verdictBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  verdictBannerText: {
+    flex: 1,
+    color: '#334155',
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  simCardContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  simCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  simCardTitle: {
     color: '#0F172A',
     fontSize: 13,
     fontWeight: '800',
   },
-  breakdownLectureCount: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  breakdownSubjectsText: {
+  simCardSub: {
     color: '#64748B',
     fontSize: 10.5,
-    marginTop: 3,
-    fontWeight: '500',
-  },
-  breakdownMetricsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  breakdownMetricCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  breakdownMetricSub: {
-    color: '#64748B',
-    fontSize: 9.5,
-    fontWeight: '700',
-  },
-  breakdownMetricVal: {
-    fontSize: 13,
-    fontWeight: '900',
     marginTop: 1,
   },
-  breakdownDiffText: {
+  simPresetBtnAttend: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  simPresetBtnAttendText: {
+    color: '#15803D',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  simPresetBtnBunk: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  simPresetBtnBunkText: {
+    color: '#B91C1C',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  simLiveBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  simLiveBarText: {
+    color: '#1E40AF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  simLiveBarPct: {
+    color: '#1D4ED8',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  simSlotRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  simSlotTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  simSlotTimeText: {
+    color: '#475569',
     fontSize: 10,
+    fontWeight: '700',
+  },
+  simSlotTypeBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  simSlotTypeBadgeText: {
+    color: '#2563EB',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  simSlotSubject: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  simImpactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  simImpactCurr: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  simImpactSep: {
+    color: '#CBD5E1',
+    fontSize: 10,
+  },
+  simImpactDelta: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  simUnmatchedText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  simToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  simToggleBtnAttend: {
+    backgroundColor: '#DCFCE7',
+  },
+  simToggleBtnBunk: {
+    backgroundColor: '#FEE2E2',
+  },
+  simToggleBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  simToggleBtnTextAttend: {
+    color: '#15803D',
+  },
+  simToggleBtnTextBunk: {
+    color: '#B91C1C',
+  },
+  simApplyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563EB',
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 12,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  simApplyBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
     fontWeight: '800',
   },
 });
