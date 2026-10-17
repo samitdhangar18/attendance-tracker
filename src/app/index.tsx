@@ -180,12 +180,12 @@ function CircularProgress({
         <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
           <Text
             style={{
-              fontSize: size >= 70 ? 12.5 : size >= 60 ? 11 : 9.5,
+              fontSize: size >= 70 ? 12 : size >= 60 ? 10.5 : 9,
               fontWeight: '900',
               color: '#0F172A',
             }}
           >
-            {percentage.toFixed(size >= 60 ? 2 : 1)}%
+            {percentage.toFixed(2)}%
           </Text>
         </View>
       )}
