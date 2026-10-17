@@ -47,11 +47,22 @@ const DEFAULT_TIMETABLE_IMG = require('../../assets/timetable.png');
 
 const STORAGE_KEYS = {
   COURSES: '@attendance_courses_v5',
-  TIMETABLE: '@attendance_timetable_v5',
+  TIMETABLE: '@attendance_official_timetable_v7',
   PROFILE_PIC: '@attendance_profile_pic_v5',
   PROFILE_DATA: '@attendance_profile_data_v5',
   GOAL: '@attendance_goal_v5',
   TIMETABLE_IMG: '@attendance_timetable_img_v6',
+};
+
+const isStaleDummyTimetable = (tt: any): boolean => {
+  if (!tt || typeof tt !== 'object') return true;
+  if (!tt.Mon || !tt.Sat) return true;
+  // Official schedule has 6 classes on Mon and 6 on Sat (34 total).
+  // The outdated dummy schedule had only 3 on Mon and 1 on Sat.
+  if (tt.Sat.length < 5 || tt.Mon.length < 5) return true;
+  if (tt.Mon.some((s: any) => s.room === 'Room 301' || s.time === '09:30 - 10:30 AM')) return true;
+  if (tt.Sat.some((s: any) => (s.subject || '').includes('Doubt Clearing'))) return true;
+  return false;
 };
 
 const PALETTE = [
@@ -343,7 +354,26 @@ export default function AttendanceTrackerApp() {
         ]);
 
         if (savedCourses) setCourses(JSON.parse(savedCourses));
-        if (savedTimetable) setTimetable(JSON.parse(savedTimetable));
+
+        // Timetable: load and ensure it is not the old mock timetable
+        let finalTimetable = INITIAL_TIMETABLE;
+        let timetableToParse = savedTimetable;
+        if (!timetableToParse) {
+          timetableToParse = await AsyncStorage.getItem('@attendance_timetable_v5');
+        }
+        if (timetableToParse) {
+          try {
+            const parsed = JSON.parse(timetableToParse);
+            if (!isStaleDummyTimetable(parsed)) {
+              finalTimetable = parsed;
+            }
+          } catch {
+            finalTimetable = INITIAL_TIMETABLE;
+          }
+        }
+        setTimetable(finalTimetable);
+        await AsyncStorage.setItem(STORAGE_KEYS.TIMETABLE, JSON.stringify(finalTimetable));
+
         if (savedProfile) setProfile(JSON.parse(savedProfile));
         if (savedProfilePic) setProfileImage(savedProfilePic);
         if (savedGoal) setTargetGoal(Number(savedGoal));
@@ -433,6 +463,28 @@ export default function AttendanceTrackerApp() {
           onPress: async () => {
             setTimetableImage('removed');
             await AsyncStorage.setItem(STORAGE_KEYS.TIMETABLE_IMG, 'removed');
+          },
+        },
+      ]
+    );
+  };
+
+  // Sync / Reset to Official College Timetable (34 classes across Mon-Sat)
+  const handleResetToOfficialTimetable = () => {
+    Alert.alert(
+      'Sync Official Timetable',
+      'Reset schedule to the official Oriental Institute CSE-Data Science V-C timetable (34 classes: Mon: 6, Tue: 5, Wed: 5, Thu: 6, Fri: 6, Sat: 6)?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sync Timetable',
+          onPress: async () => {
+            setTimetable(INITIAL_TIMETABLE);
+            await AsyncStorage.setItem(STORAGE_KEYS.TIMETABLE, JSON.stringify(INITIAL_TIMETABLE));
+            Alert.alert(
+              'Timetable Synced',
+              'Official timetable loaded successfully with all 34 classes across Mon-Sat.'
+            );
           },
         },
       ]
@@ -1159,25 +1211,24 @@ export default function AttendanceTrackerApp() {
 
         {/* TARGET ATTENDANCE THRESHOLD CARD */}
         <View style={styles.targetAdjustCard}>
-          <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
-            <Defs>
-              <LinearGradient id="targetCardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <Stop offset="0%" stopColor="#2563EB" />
-                <Stop offset="50%" stopColor="#4338CA" />
-                <Stop offset="100%" stopColor="#6366F1" />
-              </LinearGradient>
-            </Defs>
-            <Rect width="100%" height="100%" fill="url(#targetCardGrad)" />
-            <Circle cx="15%" cy="30%" r="90" fill="rgba(255,255,255,0.06)" />
-            <Circle cx="85%" cy="85%" r="75" fill="rgba(255,255,255,0.05)" />
+          <Svg
+            width="100%"
+            height="100%"
+            style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
+            preserveAspectRatio="none"
+          >
+            <Circle cx="10%" cy="20%" r="80" fill="rgba(255,255,255,0.08)" />
+            <Circle cx="90%" cy="80%" r="90" fill="rgba(255,255,255,0.06)" />
           </Svg>
 
           <View style={styles.targetAdjustHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <MaterialCommunityIcons name="target" size={32} color="#FFFFFF" />
+              <View style={styles.targetIconCircle}>
+                <MaterialCommunityIcons name="target" size={20} color="#FFFFFF" />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.targetAdjustTitle}>Target Attendance Threshold</Text>
-                <Text style={styles.targetAdjustSub}>Tap or customize your institutional target:</Text>
+                <Text style={styles.targetAdjustSub}>Tap to customize your institutional target:</Text>
               </View>
             </View>
             <View style={styles.targetValueBadge}>
@@ -1673,6 +1724,14 @@ export default function AttendanceTrackerApp() {
                     </Text>
                   </View>
                 </View>
+                <TouchableOpacity
+                  onPress={handleResetToOfficialTimetable}
+                  style={styles.analyzerSyncBtn}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="sync" size={12} color="#2563EB" />
+                  <Text style={styles.analyzerSyncBtnText}>Official Timetable</Text>
+                </TouchableOpacity>
               </View>
 
               {/* Mode Switcher: Single Day vs Multi-Day */}
@@ -2187,12 +2246,28 @@ export default function AttendanceTrackerApp() {
           <View style={styles.tabContentWrapper}>
             {/* INSTITUTIONAL TARGET GOAL PICKER */}
             <View style={styles.targetAdjustCard}>
+              <Svg
+                width="100%"
+                height="100%"
+                style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
+                preserveAspectRatio="none"
+              >
+                <Circle cx="10%" cy="20%" r="80" fill="rgba(255,255,255,0.08)" />
+                <Circle cx="90%" cy="80%" r="90" fill="rgba(255,255,255,0.06)" />
+              </Svg>
+
               <View style={styles.targetAdjustHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="flag-outline" size={16} color="#4338CA" />
-                  <Text style={styles.targetAdjustTitle}>Institutional Attendance Target</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <View style={styles.targetIconCircle}>
+                    <Ionicons name="flag" size={18} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.targetAdjustTitle}>Institutional Attendance Target</Text>
+                    <Text style={styles.targetAdjustSub}>Set target for safe bunk & recovery lectures:</Text>
+                  </View>
                 </View>
                 <View style={styles.targetValueBadge}>
+                  <MaterialCommunityIcons name="target" size={14} color="#D97706" />
                   <Text style={styles.targetValueBadgeText}>{targetGoal}%</Text>
                 </View>
               </View>
@@ -2306,6 +2381,31 @@ export default function AttendanceTrackerApp() {
                 </View>
               </View>
             ))}
+
+            {/* TIMETABLE SCHEDULE SETUP */}
+            <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="calendar-clock" size={18} color="#2563EB" />
+                <Text style={styles.sectionTitle}>College Timetable Management</Text>
+              </View>
+            </View>
+
+            <View style={styles.manageTimetableCard}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.manageTimetableTitle}>Official Department Schedule</Text>
+                <Text style={styles.manageTimetableSub}>
+                  Oriental Institute CSE-Data Science V-C schedule (34 weekly classes: Mon: 6, Tue: 5, Wed: 5, Thu: 6, Fri: 6, Sat: 6).
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleResetToOfficialTimetable}
+                style={styles.manageSyncBtn}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="sync" size={14} color="#FFFFFF" />
+                <Text style={styles.manageSyncBtnText}>Sync Official</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -2837,13 +2937,26 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 20,
     padding: 16,
+    backgroundColor: '#1E40AF',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
     overflow: 'hidden',
     position: 'relative',
-    shadowColor: '#4338CA',
+    shadowColor: '#1E3A8A',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.22,
     shadowRadius: 14,
     elevation: 4,
+  },
+  targetIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
   },
   targetAdjustHeader: {
     flexDirection: 'row',
@@ -2856,18 +2969,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   targetAdjustSub: {
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: 'rgba(255, 255, 255, 0.88)',
     fontSize: 11,
     marginTop: 2,
   },
   targetValueBadge: {
     backgroundColor: '#FEF3C7',
     borderRadius: 16,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   targetValueBadgeText: {
     color: '#D97706',
@@ -2882,26 +2997,30 @@ const styles = StyleSheet.create({
   },
   targetChoiceBtn: {
     flex: 1,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    paddingVertical: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
   },
   targetChoiceBtnActive: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+    borderColor: '#FFFFFF',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },
   targetChoiceText: {
-    color: 'rgba(255, 255, 255, 0.95)',
+    color: '#FFFFFF',
     fontSize: 12.5,
     fontWeight: '700',
   },
   targetChoiceTextActive: {
-    color: '#4338CA',
+    color: '#1E40AF',
     fontWeight: '900',
   },
   tabContainer: {
@@ -3295,6 +3414,53 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEF3F8',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  manageTimetableCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  manageTimetableTitle: {
+    color: '#0F172A',
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  manageTimetableSub: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 3,
+    lineHeight: 15,
+  },
+  manageSyncBtn: {
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  manageSyncBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '800',
   },
   modalOverlay: {
     flex: 1,
@@ -3725,6 +3891,22 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 11,
     marginTop: 1,
+  },
+  analyzerSyncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  analyzerSyncBtnText: {
+    color: '#2563EB',
+    fontSize: 10.5,
+    fontWeight: '700',
   },
   analyzerDayBadge: {
     backgroundColor: '#EFF6FF',
