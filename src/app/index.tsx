@@ -300,8 +300,13 @@ export default function AttendanceTrackerApp() {
   const [fullScreenImageVisible, setFullScreenImageVisible] = useState(false);
   const [scheduleViewMode, setScheduleViewMode] = useState<'photo' | 'slots'>('photo');
   const [targetGoal, setTargetGoal] = useState<number>(65);
-  const [activeTab, setActiveTab] = useState<'Classes' | 'Schedule' | 'Target Planner' | 'Manage'>('Classes');
+  const [activeTab, setActiveTab] = useState<'Classes' | 'Schedule' | 'Impact' | 'Target Planner' | 'Manage'>('Classes');
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  // Timetable Impact Analyzer State
+  const [impactStartDay, setImpactStartDay] = useState<string>('Mon');
+  const [impactDaysInput, setImpactDaysInput] = useState<string>('6');
+  const [impactMode, setImpactMode] = useState<'single' | 'multiday'>('single');
 
   // Modals
   const [profileModalVisible, setProfileModalVisible] = useState(false);
@@ -573,6 +578,106 @@ export default function AttendanceTrackerApp() {
       avgPct,
     };
   }, [courses]);
+
+  // Timetable-driven Impact Calculations (Gain & Loss)
+  const impactData = useMemo(() => {
+    const totalConducted = stats.totalConducted;
+    const totalPresent = stats.totalPresent;
+    const currentPct = stats.presentPct;
+    const collegeDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // 1. Specific Day Calculation
+    const singleSlots = timetable[impactStartDay] || [];
+    const singleCount = singleSlots.length;
+
+    // If attended all classes on this specific day
+    const singleAttendPct =
+      totalConducted + singleCount > 0
+        ? ((totalPresent + singleCount) / (totalConducted + singleCount)) * 100
+        : 0;
+    const singleGain = singleAttendPct - currentPct;
+
+    // If absent / miss all classes on this specific day
+    const singleAbsentPct =
+      totalConducted + singleCount > 0
+        ? (totalPresent / (totalConducted + singleCount)) * 100
+        : 0;
+    const singleLoss = currentPct - singleAbsentPct;
+
+    // 2. Multi-Day Forecast (e.g. 6 days)
+    const parsedDays = Math.max(1, Math.min(30, parseInt(impactDaysInput, 10) || 1));
+    const startIdx = collegeDays.indexOf(impactStartDay) >= 0 ? collegeDays.indexOf(impactStartDay) : 0;
+
+    let cumulativeLectures = 0;
+    const dayBreakdown: Array<{
+      dayIndex: number;
+      dayName: string;
+      slotsCount: number;
+      subjects: string[];
+      cumulativeLectures: number;
+      attendPct: number;
+      gainPct: number;
+      absentPct: number;
+      lossPct: number;
+    }> = [];
+
+    for (let i = 0; i < parsedDays; i++) {
+      const dayName = collegeDays[(startIdx + i) % collegeDays.length];
+      const daySlots = timetable[dayName] || [];
+      const slotsCount = daySlots.length;
+      cumulativeLectures += slotsCount;
+
+      const runningAttendPct =
+        totalConducted + cumulativeLectures > 0
+          ? ((totalPresent + cumulativeLectures) / (totalConducted + cumulativeLectures)) * 100
+          : 0;
+      const runningAbsentPct =
+        totalConducted + cumulativeLectures > 0
+          ? (totalPresent / (totalConducted + cumulativeLectures)) * 100
+          : 0;
+
+      dayBreakdown.push({
+        dayIndex: i + 1,
+        dayName,
+        slotsCount,
+        subjects: Array.from(new Set(daySlots.map((s) => s.subject))),
+        cumulativeLectures,
+        attendPct: runningAttendPct,
+        gainPct: runningAttendPct - currentPct,
+        absentPct: runningAbsentPct,
+        lossPct: currentPct - runningAbsentPct,
+      });
+    }
+
+    const totalMultiLectures = cumulativeLectures;
+    const multiAttendPct =
+      totalConducted + totalMultiLectures > 0
+        ? ((totalPresent + totalMultiLectures) / (totalConducted + totalMultiLectures)) * 100
+        : 0;
+    const multiGain = multiAttendPct - currentPct;
+
+    const multiAbsentPct =
+      totalConducted + totalMultiLectures > 0
+        ? (totalPresent / (totalConducted + totalMultiLectures)) * 100
+        : 0;
+    const multiLoss = currentPct - multiAbsentPct;
+
+    return {
+      singleSlots,
+      singleCount,
+      singleAttendPct,
+      singleGain,
+      singleAbsentPct,
+      singleLoss,
+      parsedDays,
+      totalMultiLectures,
+      multiAttendPct,
+      multiGain,
+      multiAbsentPct,
+      multiLoss,
+      dayBreakdown,
+    };
+  }, [stats, timetable, impactStartDay, impactDaysInput]);
 
   // Stepper Modifier
   const updateCount = (id: string, field: 'present' | 'total', delta: number) => {
@@ -1071,7 +1176,7 @@ export default function AttendanceTrackerApp() {
           >
             <Ionicons
               name={activeTab === 'Classes' ? 'school' : 'school-outline'}
-              size={15}
+              size={14}
               color={activeTab === 'Classes' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Classes' && styles.tabButtonTextActive]}>
@@ -1086,11 +1191,26 @@ export default function AttendanceTrackerApp() {
           >
             <Feather
               name="calendar"
-              size={14}
+              size={13}
               color={activeTab === 'Schedule' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Schedule' && styles.tabButtonTextActive]}>
               Schedule
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('Impact')}
+            style={[styles.tabButton, activeTab === 'Impact' && styles.tabButtonActive]}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons
+              name="lightning-bolt"
+              size={14}
+              color={activeTab === 'Impact' ? '#FFFFFF' : '#64748B'}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'Impact' && styles.tabButtonTextActive]}>
+              Impact
             </Text>
           </TouchableOpacity>
 
@@ -1101,7 +1221,7 @@ export default function AttendanceTrackerApp() {
           >
             <MaterialCommunityIcons
               name="target"
-              size={15}
+              size={14}
               color={activeTab === 'Target Planner' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Target Planner' && styles.tabButtonTextActive]}>
@@ -1116,7 +1236,7 @@ export default function AttendanceTrackerApp() {
           >
             <Feather
               name="settings"
-              size={14}
+              size={13}
               color={activeTab === 'Manage' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Manage' && styles.tabButtonTextActive]}>
@@ -1510,7 +1630,389 @@ export default function AttendanceTrackerApp() {
           </View>
         )}
 
-        {/* TAB 3: TARGET PLANNER */}
+        {/* TAB 3: IMPACT ANALYZER (TIMETABLE BASED) */}
+        {activeTab === 'Impact' && (
+          <View style={styles.tabContentWrapper}>
+            {/* Header Title & Benchmark */}
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialCommunityIcons name="lightning-bolt-circle" size={22} color="#2563EB" />
+                <Text style={styles.sectionTitle}>Timetable Impact Analyzer</Text>
+              </View>
+              <View style={styles.impactCurrentBadge}>
+                <Text style={styles.impactCurrentBadgeText}>Now: {stats.presentPct.toFixed(2)}%</Text>
+              </View>
+            </View>
+
+            <Text style={styles.plannerSubText}>
+              Simulate overall attendance Gain & Loss based on scheduled classes in your official timetable.
+            </Text>
+
+            {/* Mode Switcher: Single Day vs Multi-Day Forecast */}
+            <View style={styles.impactModeRow}>
+              <TouchableOpacity
+                onPress={() => setImpactMode('single')}
+                style={[
+                  styles.impactModeBtn,
+                  impactMode === 'single' && styles.impactModeBtnActive,
+                ]}
+                activeOpacity={0.8}
+              >
+                <Feather
+                  name="calendar"
+                  size={14}
+                  color={impactMode === 'single' ? '#FFFFFF' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.impactModeText,
+                    impactMode === 'single' && styles.impactModeTextActive,
+                  ]}
+                >
+                  Specific Day Impact
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setImpactMode('multiday')}
+                style={[
+                  styles.impactModeBtn,
+                  impactMode === 'multiday' && styles.impactModeBtnActive,
+                ]}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name="calendar-range"
+                  size={15}
+                  color={impactMode === 'multiday' ? '#FFFFFF' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.impactModeText,
+                    impactMode === 'multiday' && styles.impactModeTextActive,
+                  ]}
+                >
+                  Multi-Day Simulator
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Starting / Selected Day Picker */}
+            <View style={styles.impactDayPickerCard}>
+              <View style={styles.impactPickerHeader}>
+                <Text style={styles.impactPickerTitle}>
+                  {impactMode === 'single' ? 'Select Day to Analyze' : 'Start Forecasting From'}
+                </Text>
+                <Text style={styles.impactPickerSub}>
+                  {impactData.singleCount} lectures on {impactStartDay}
+                </Text>
+              </View>
+              <View style={styles.daySelectorRow}>
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => {
+                  const isDaySelected = impactStartDay === day;
+                  const dayClassCount = timetable[day]?.length || 0;
+                  return (
+                    <TouchableOpacity
+                      key={day}
+                      onPress={() => setImpactStartDay(day)}
+                      style={[styles.dayChoiceBtn, isDaySelected && styles.dayChoiceBtnActive]}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.dayChoiceText,
+                          isDaySelected && styles.dayChoiceTextActive,
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.dayChoiceSubText,
+                          isDaySelected && styles.dayChoiceSubTextActive,
+                        ]}
+                      >
+                        {dayClassCount}L
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* VIEW 1: SINGLE DAY IMPACT */}
+            {impactMode === 'single' && (
+              <View style={{ gap: 14 }}>
+                {/* Specific Day Card */}
+                <View style={styles.impactResultCard}>
+                  <View style={styles.impactResultTop}>
+                    <View>
+                      <Text style={styles.impactResultTitle}>{impactStartDay} Timetable</Text>
+                      <Text style={styles.impactResultSub}>
+                        {impactData.singleCount} lectures scheduled on this day
+                      </Text>
+                    </View>
+                    <View style={styles.impactLecturesPill}>
+                      <Ionicons name="school-outline" size={13} color="#2563EB" />
+                      <Text style={styles.impactLecturesPillText}>
+                        {impactData.singleCount} Classes
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Scheduled Subjects Chips */}
+                  <View style={styles.impactChipWrap}>
+                    {impactData.singleSlots.map((slot) => (
+                      <View key={slot.id} style={styles.impactSubjectChip}>
+                        <Text style={styles.impactSubjectChipText}>{slot.subject}</Text>
+                        <Text style={styles.impactSubjectChipTime}>{slot.time.split(' - ')[0]}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Dual Projection: If Attend vs If Absent */}
+                  <View style={styles.impactDualRow}>
+                    {/* ATTEND ALL */}
+                    <View style={[styles.impactBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                      <View style={styles.impactBoxHeader}>
+                        <Ionicons name="arrow-up-circle" size={16} color="#059669" />
+                        <Text style={[styles.impactBoxLabel, { color: '#059669' }]}>IF YOU ATTEND</Text>
+                      </View>
+                      <Text style={[styles.impactBoxValue, { color: '#059669' }]}>
+                        {impactData.singleAttendPct.toFixed(2)}%
+                      </Text>
+                      <View style={[styles.impactChangePill, { backgroundColor: '#DCFCE7' }]}>
+                        <Text style={[styles.impactChangeText, { color: '#15803D' }]}>
+                          +{impactData.singleGain.toFixed(2)}% Gain
+                        </Text>
+                      </View>
+                      <Text style={styles.impactBoxFootnote}>
+                        {impactData.singleAttendPct >= targetGoal
+                          ? `Above ${targetGoal}% goal`
+                          : `${(targetGoal - impactData.singleAttendPct).toFixed(2)}% below goal`}
+                      </Text>
+                    </View>
+
+                    {/* MISS ALL */}
+                    <View style={[styles.impactBox, { backgroundColor: '#FEF2F2', borderColor: '#FECDD3' }]}>
+                      <View style={styles.impactBoxHeader}>
+                        <Ionicons name="arrow-down-circle" size={16} color="#DC2626" />
+                        <Text style={[styles.impactBoxLabel, { color: '#DC2626' }]}>IF YOU ARE ABSENT</Text>
+                      </View>
+                      <Text style={[styles.impactBoxValue, { color: '#DC2626' }]}>
+                        {impactData.singleAbsentPct.toFixed(2)}%
+                      </Text>
+                      <View style={[styles.impactChangePill, { backgroundColor: '#FEE2E2' }]}>
+                        <Text style={[styles.impactChangeText, { color: '#B91C1C' }]}>
+                          -{impactData.singleLoss.toFixed(2)}% Loss
+                        </Text>
+                      </View>
+                      <Text style={styles.impactBoxFootnote}>
+                        {impactData.singleAbsentPct >= targetGoal
+                          ? `Still above ${targetGoal}% goal`
+                          : `Falls ${(targetGoal - impactData.singleAbsentPct).toFixed(2)}% short`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* VIEW 2: MULTI-DAY FORECAST (e.g. 6 Days) */}
+            {impactMode === 'multiday' && (
+              <View style={{ gap: 14 }}>
+                {/* Number of Days Input Card */}
+                <View style={styles.multiInputCard}>
+                  <Text style={styles.multiInputTitle}>Enter Number of Days to Forecast</Text>
+                  <Text style={styles.multiInputSub}>
+                    Calculates cumulative gain & loss for the next scheduled days in your timetable
+                  </Text>
+
+                  {/* Stepper + Input */}
+                  <View style={styles.multiInputRow}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const current = parseInt(impactDaysInput, 10) || 1;
+                        if (current > 1) setImpactDaysInput(String(current - 1));
+                      }}
+                      style={styles.stepBtnMinus}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="minus" size={16} color="#475569" />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={styles.multiTextInput}
+                      keyboardType="numeric"
+                      value={impactDaysInput}
+                      onChangeText={(val) => {
+                        const num = val.replace(/[^0-9]/g, '');
+                        setImpactDaysInput(num);
+                      }}
+                      placeholder="6"
+                      placeholderTextColor="#94A3B8"
+                    />
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        const current = parseInt(impactDaysInput, 10) || 1;
+                        if (current < 30) setImpactDaysInput(String(current + 1));
+                      }}
+                      style={styles.stepBtnPlusTotal}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="plus" size={16} color="#2563EB" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Quick Preset Buttons */}
+                  <View style={styles.quickPresetRow}>
+                    {['1', '3', '6', '12'].map((preset) => (
+                      <TouchableOpacity
+                        key={preset}
+                        onPress={() => setImpactDaysInput(preset)}
+                        style={[
+                          styles.quickPresetBtn,
+                          impactDaysInput === preset && styles.quickPresetBtnActive,
+                        ]}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.quickPresetText,
+                            impactDaysInput === preset && styles.quickPresetTextActive,
+                          ]}
+                        >
+                          {preset} {preset === '1' ? 'Day' : preset === '6' ? 'Days (1 Wk)' : preset === '12' ? 'Days (2 Wks)' : 'Days'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Multi-Day Overall Result Card */}
+                <View style={styles.impactResultCard}>
+                  <View style={styles.impactResultTop}>
+                    <View>
+                      <Text style={styles.impactResultTitle}>
+                        Next {impactData.parsedDays} Days Forecast
+                      </Text>
+                      <Text style={styles.impactResultSub}>
+                        Starting {impactStartDay} • {impactData.totalMultiLectures} total timetable lectures
+                      </Text>
+                    </View>
+                    <View style={styles.impactLecturesPill}>
+                      <MaterialCommunityIcons name="counter" size={14} color="#2563EB" />
+                      <Text style={styles.impactLecturesPillText}>
+                        {impactData.totalMultiLectures} Lectures
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Dual Multi-Day Projection Cards */}
+                  <View style={styles.impactDualRow}>
+                    {/* IF 100% ATTENDED OVER N DAYS */}
+                    <View style={[styles.impactBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                      <View style={styles.impactBoxHeader}>
+                        <Ionicons name="arrow-up-circle" size={16} color="#059669" />
+                        <Text style={[styles.impactBoxLabel, { color: '#059669' }]}>
+                          ATTEND ALL {impactData.parsedDays}D
+                        </Text>
+                      </View>
+                      <Text style={[styles.impactBoxValue, { color: '#059669' }]}>
+                        {impactData.multiAttendPct.toFixed(2)}%
+                      </Text>
+                      <View style={[styles.impactChangePill, { backgroundColor: '#DCFCE7' }]}>
+                        <Text style={[styles.impactChangeText, { color: '#15803D' }]}>
+                          +{impactData.multiGain.toFixed(2)}% Gain
+                        </Text>
+                      </View>
+                      <Text style={styles.impactBoxFootnote}>
+                        {impactData.multiAttendPct >= targetGoal
+                          ? `Safely above ${targetGoal}% goal`
+                          : `Reaches ${(targetGoal - impactData.multiAttendPct).toFixed(2)}% deficit`}
+                      </Text>
+                    </View>
+
+                    {/* IF 100% ABSENT OVER N DAYS */}
+                    <View style={[styles.impactBox, { backgroundColor: '#FEF2F2', borderColor: '#FECDD3' }]}>
+                      <View style={styles.impactBoxHeader}>
+                        <Ionicons name="arrow-down-circle" size={16} color="#DC2626" />
+                        <Text style={[styles.impactBoxLabel, { color: '#DC2626' }]}>
+                          ABSENT ALL {impactData.parsedDays}D
+                        </Text>
+                      </View>
+                      <Text style={[styles.impactBoxValue, { color: '#DC2626' }]}>
+                        {impactData.multiAbsentPct.toFixed(2)}%
+                      </Text>
+                      <View style={[styles.impactChangePill, { backgroundColor: '#FEE2E2' }]}>
+                        <Text style={[styles.impactChangeText, { color: '#B91C1C' }]}>
+                          -{impactData.multiLoss.toFixed(2)}% Loss
+                        </Text>
+                      </View>
+                      <Text style={styles.impactBoxFootnote}>
+                        {impactData.multiAbsentPct >= targetGoal
+                          ? `Still maintains ${targetGoal}%`
+                          : `Drops ${(targetGoal - impactData.multiAbsentPct).toFixed(2)}% below goal`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Day-by-Day Sequence Breakdown */}
+                <View style={styles.breakdownContainer}>
+                  <Text style={styles.breakdownHeaderTitle}>
+                    Day-by-Day Timetable Progression
+                  </Text>
+                  {impactData.dayBreakdown.map((item) => (
+                    <View key={`${item.dayIndex}-${item.dayName}`} style={styles.breakdownRowCard}>
+                      <View style={styles.breakdownRowTop}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={styles.breakdownDayBadge}>
+                            <Text style={styles.breakdownDayBadgeText}>D{item.dayIndex}</Text>
+                          </View>
+                          <Text style={styles.breakdownDayName}>{item.dayName}</Text>
+                          <Text style={styles.breakdownLectureCount}>
+                            ({item.slotsCount} lectures)
+                          </Text>
+                        </View>
+                        <Text style={styles.breakdownSubjectsText} numberOfLines={1}>
+                          {item.subjects.join(', ')}
+                        </Text>
+                      </View>
+
+                      <View style={styles.breakdownMetricsRow}>
+                        <View style={styles.breakdownMetricCol}>
+                          <Text style={styles.breakdownMetricSub}>If Attended</Text>
+                          <Text style={[styles.breakdownMetricVal, { color: '#059669' }]}>
+                            {item.attendPct.toFixed(2)}%
+                          </Text>
+                          <Text style={[styles.breakdownDiffText, { color: '#059669' }]}>
+                            +{item.gainPct.toFixed(2)}%
+                          </Text>
+                        </View>
+
+                        <View style={styles.overviewMetricDivider} />
+
+                        <View style={styles.breakdownMetricCol}>
+                          <Text style={styles.breakdownMetricSub}>If Absent</Text>
+                          <Text style={[styles.breakdownMetricVal, { color: '#DC2626' }]}>
+                            {item.absentPct.toFixed(2)}%
+                          </Text>
+                          <Text style={[styles.breakdownDiffText, { color: '#DC2626' }]}>
+                            -{item.lossPct.toFixed(2)}%
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* TAB 4: TARGET PLANNER */}
         {activeTab === 'Target Planner' && (
           <View style={styles.tabContentWrapper}>
             <View style={styles.sectionHeaderRow}>
@@ -2220,7 +2722,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: 4,
+    padding: 3,
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
@@ -2232,11 +2734,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   tabButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    justifyContent: 'center',
+    gap: 3.5,
+    paddingVertical: 7.5,
+    paddingHorizontal: 2,
     borderRadius: 18,
   },
   tabButtonActive: {
@@ -2249,8 +2753,8 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     color: '#64748B',
-    fontSize: 11.5,
-    fontWeight: '600',
+    fontSize: 10.8,
+    fontWeight: '700',
   },
   tabButtonTextActive: {
     color: '#FFFFFF',
@@ -3012,5 +3516,356 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  // Timetable Impact Analyzer Styles
+  impactCurrentBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  impactCurrentBadgeText: {
+    color: '#2563EB',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  impactModeRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    padding: 3,
+    marginTop: 12,
+    gap: 4,
+  },
+  impactModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 11,
+  },
+  impactModeBtnActive: {
+    backgroundColor: '#2563EB',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  impactModeText: {
+    color: '#64748B',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  impactModeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  impactDayPickerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  impactPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  impactPickerTitle: {
+    color: '#0F172A',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  impactPickerSub: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  dayChoiceSubText: {
+    color: '#94A3B8',
+    fontSize: 9.5,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  dayChoiceSubTextActive: {
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  impactResultCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  impactResultTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  impactResultTitle: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  impactResultSub: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  impactLecturesPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  impactLecturesPillText: {
+    color: '#2563EB',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  impactChipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  impactSubjectChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  impactSubjectChipText: {
+    color: '#1E293B',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  impactSubjectChipTime: {
+    color: '#64748B',
+    fontSize: 9.5,
+    fontWeight: '500',
+  },
+  impactDualRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  impactBox: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+  },
+  impactBoxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  impactBoxLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  impactBoxValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  impactChangePill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    marginVertical: 4,
+  },
+  impactChangeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  impactBoxFootnote: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  multiInputCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  multiInputTitle: {
+    color: '#0F172A',
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  multiInputSub: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  multiInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  multiTextInput: {
+    width: 80,
+    height: 42,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#2563EB',
+    borderRadius: 12,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  quickPresetRow: {
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'space-between',
+  },
+  quickPresetBtn: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quickPresetBtnActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#2563EB',
+  },
+  quickPresetText: {
+    color: '#64748B',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  quickPresetTextActive: {
+    color: '#2563EB',
+    fontWeight: '900',
+  },
+  breakdownContainer: {
+    marginTop: 4,
+    gap: 8,
+  },
+  breakdownHeaderTitle: {
+    color: '#0F172A',
+    fontSize: 13.5,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  breakdownRowCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  breakdownRowTop: {
+    marginBottom: 8,
+  },
+  breakdownDayBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  breakdownDayBadgeText: {
+    color: '#2563EB',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  breakdownDayName: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  breakdownLectureCount: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  breakdownSubjectsText: {
+    color: '#64748B',
+    fontSize: 10.5,
+    marginTop: 3,
+    fontWeight: '500',
+  },
+  breakdownMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  breakdownMetricCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  breakdownMetricSub: {
+    color: '#64748B',
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+  breakdownMetricVal: {
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 1,
+  },
+  breakdownDiffText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
 });
