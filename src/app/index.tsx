@@ -139,11 +139,13 @@ function CircularProgress({
   color,
   size = 46,
   strokeWidth = 4.5,
+  showLabel = true,
 }: {
   percentage: number;
   color: string;
   size?: number;
   strokeWidth?: number;
+  showLabel?: boolean;
 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -157,7 +159,7 @@ function CircularProgress({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="#E2E8F0"
+          stroke="#F1F5F9"
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -174,35 +176,19 @@ function CircularProgress({
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
-      <View style={{ position: 'absolute' }}>
-        <Text style={{ fontSize: 10, fontWeight: '800', color: '#1E293B' }}>
-          {Math.round(percentage)}%
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function CollegeBuildingGraphic() {
-  return (
-    <View style={styles.collegeBuildingBadge}>
-      <Svg width={72} height={60} viewBox="0 0 68 58" fill="none">
-        <Path d="M34 52 L58 40 L34 28 L10 40 Z" fill="#E2E8F0" />
-        <Path d="M10 40 L34 52 L34 55 L10 43 Z" fill="#CBD5E1" />
-        <Path d="M34 52 L58 40 L58 43 L34 55 Z" fill="#94A3B8" />
-        <Path d="M24 20 L34 25 L34 45 L24 40 Z" fill="#3B82F6" />
-        <Path d="M34 25 L44 20 L44 40 L34 45 Z" fill="#60A5FA" />
-        <Path d="M34 14 L44 20 L34 25 L24 20 Z" fill="#93C5FD" />
-        <Path d="M26 26 L29 28 L29 31 L26 29 Z" fill="#FFFFFF" />
-        <Path d="M26 33 L29 35 L29 38 L26 36 Z" fill="#FFFFFF" />
-        <Path d="M38 28 L41 26 L41 29 L38 31 Z" fill="#FFFFFF" />
-        <Path d="M38 35 L41 33 L41 36 L38 38 Z" fill="#FFFFFF" />
-        <Path d="M32 8 L36 10 L34 14 Z" fill="#1D4ED8" />
-        <Circle cx="17" cy="38" r="5" fill="#10B981" />
-        <Circle cx="51" cy="38" r="5" fill="#10B981" />
-        <Circle cx="14" cy="41" r="3.5" fill="#059669" />
-        <Circle cx="54" cy="41" r="3.5" fill="#059669" />
-      </Svg>
+      {showLabel && (
+        <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+          <Text
+            style={{
+              fontSize: size >= 70 ? 13 : 10,
+              fontWeight: '900',
+              color: '#0F172A',
+            }}
+          >
+            {percentage.toFixed(size >= 70 ? 2 : 1)}%
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -609,18 +595,30 @@ export default function AttendanceTrackerApp() {
     );
   };
 
-  // Target Attendance Math (Bunk or Attend more)
+  // Target Attendance Math (Bunk or Attend more) - Exact Integer Arithmetic
   const calculateGoalAdvice = (present: number, total: number, target: number) => {
-    if (total === 0) return { status: 'none', count: 0 };
+    if (total === 0 || target <= 0) return { status: 'none', count: 0 };
     const currentPct = (present / total) * 100;
-    const targetDec = target / 100;
 
     if (currentPct >= target) {
-      const canBunk = Math.floor((present - targetDec * total) / targetDec);
-      return { status: 'safe', count: canBunk };
+      // Maximum future classes you can bunk without dropping below target%
+      // (present) / (total + B) >= target / 100
+      // 100 * present >= target * (total + B)
+      // 100 * present - target * total >= target * B
+      // B <= (100 * present - target * total) / target
+      const canBunk = Math.floor((100 * present - target * total) / target);
+      return { status: 'safe', count: Math.max(0, canBunk) };
     } else {
-      const needToAttend = Math.ceil((targetDec * total - present) / (1 - targetDec));
-      return { status: 'short', count: needToAttend };
+      // Minimum consecutive classes you must attend to reach >= target%
+      // (present + A) / (total + A) >= target / 100
+      // 100 * (present + A) >= target * (total + A)
+      // (100 - target) * A >= target * total - 100 * present
+      // A >= (target * total - 100 * present) / (100 - target)
+      if (target >= 100) return { status: 'short', count: 999 };
+      const diff = target * total - 100 * present;
+      const divisor = 100 - target;
+      const needToAttend = Math.ceil(diff / divisor);
+      return { status: 'short', count: Math.max(1, needToAttend) };
     }
   };
 
@@ -765,26 +763,18 @@ export default function AttendanceTrackerApp() {
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* TOP HERO HEADER */}
+        {/* SLEEK SPACIOUS HEADER HERO */}
         <View style={styles.headerHero}>
           <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
             <Defs>
               <LinearGradient id="heroGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                 <Stop offset="0%" stopColor="#1E3A8A" />
-                <Stop offset="40%" stopColor="#2563EB" />
-                <Stop offset="80%" stopColor="#0284C7" />
-                <Stop offset="100%" stopColor="#06B6D4" />
+                <Stop offset="50%" stopColor="#2563EB" />
+                <Stop offset="100%" stopColor="#3B82F6" />
               </LinearGradient>
             </Defs>
             <Rect width="100%" height="100%" fill="url(#heroGradient)" />
-            <Path
-              d="M-20,130 Q100,80 220,120 T460,95 L460,220 L-20,220 Z"
-              fill="rgba(255, 255, 255, 0.08)"
-            />
-            <Path
-              d="M-20,150 Q120,105 260,140 T460,115 L460,220 L-20,220 Z"
-              fill="rgba(255, 255, 255, 0.06)"
-            />
+            <Circle cx="90%" cy="10%" r="80" fill="rgba(255, 255, 255, 0.06)" />
           </Svg>
 
           <View style={styles.headerTopRow}>
@@ -805,22 +795,24 @@ export default function AttendanceTrackerApp() {
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.8}>
+              <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.8} style={{ flex: 1, paddingRight: 6 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={styles.headerName}>{profile.name}</Text>
-                  <Feather name="edit-2" size={13} color="#FFFFFF" />
+                  <Feather name="edit-2" size={13} color="rgba(255, 255, 255, 0.85)" />
                 </View>
-                <Text style={styles.headerSemester}>{profile.semester}</Text>
+                <Text style={styles.headerSemester} numberOfLines={1}>
+                  {profile.semester} • {profile.college}
+                </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Action Buttons: Bell & Calendar */}
+            {/* Quick Actions: Bell & Calendar */}
             <View style={styles.headerActionsRow}>
               <TouchableOpacity
                 onPress={() => {
                   Alert.alert(
-                    'Attendance Notifications',
-                    `${profile.name}, your overall attendance is ${stats.presentPct.toFixed(1)}%. Target is ${targetGoal}%. Keep attending lectures!`,
+                    'Attendance Overview',
+                    `${profile.name}, your overall attendance is ${stats.presentPct.toFixed(2)}%. Target is ${targetGoal}%. ${overallAdvice.status === 'safe' ? `You can safely bunk ${overallAdvice.count} classes.` : `Attend next ${overallAdvice.count} lectures in a row to reach goal.`}`,
                     [{ text: 'OK' }]
                   );
                 }}
@@ -828,7 +820,6 @@ export default function AttendanceTrackerApp() {
                 activeOpacity={0.8}
               >
                 <Feather name="bell" size={18} color="#FFFFFF" />
-                <View style={styles.bellBadgeDot} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -842,198 +833,150 @@ export default function AttendanceTrackerApp() {
           </View>
         </View>
 
-        {/* OVERLAPPING COLLEGE / INSTITUTION CARD */}
-        <View style={styles.profileBanner}>
-          <View style={styles.profileBannerTop}>
-            <View style={styles.verifiedTag}>
-              <MaterialCommunityIcons name="shield-check" size={13} color="#059669" />
-              <Text style={styles.verifiedTagText}>OFFLINE SAVED</Text>
-              <MaterialCommunityIcons name="wifi-off" size={12} color="#059669" style={{ marginLeft: 2 }} />
+        {/* MASTER OVERALL ATTENDANCE HERO CARD */}
+        <View style={styles.overviewHeroCard}>
+          <View style={styles.overviewTopRow}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="chart-arc" size={16} color="#2563EB" />
+                <Text style={styles.overviewCardLabel}>OVERALL ATTENDANCE</Text>
+              </View>
+              <Text
+                style={[
+                  styles.overviewBigPct,
+                  { color: stats.presentPct >= targetGoal ? '#059669' : '#DC2626' },
+                ]}
+              >
+                {stats.presentPct.toFixed(2)}%
+              </Text>
+              <View style={styles.overviewGoalTag}>
+                <Text style={styles.overviewGoalTagText}>
+                  {stats.presentPct >= targetGoal
+                    ? `Safely above ${targetGoal}% target`
+                    : `Shortage: ${(targetGoal - stats.presentPct).toFixed(2)}% below goal`}
+                </Text>
+              </View>
             </View>
-            <TouchableOpacity onPress={openProfileEdit} style={styles.editBioBtn} activeOpacity={0.7}>
-              <Feather name="edit-3" size={13} color="#2563EB" />
-              <Text style={styles.editBioBtnText}>Edit Info</Text>
-            </TouchableOpacity>
+
+            <CircularProgress
+              percentage={stats.presentPct}
+              color={stats.presentPct >= targetGoal ? '#10B981' : '#F43F5E'}
+              size={74}
+              strokeWidth={7}
+            />
           </View>
 
-          <View style={styles.collegeBuildingRow}>
-            <View style={{ flex: 1, paddingRight: 8 }}>
-              <Text style={styles.collegeText}>{profile.college}</Text>
-              <Text style={styles.degreeText}>{profile.degree}</Text>
-            </View>
-            <CollegeBuildingGraphic />
-          </View>
-
-          {/* Shortage Alert / Safe Zone Banner */}
+          {/* Smart Safe/Shortage Banner */}
           <TouchableOpacity
             onPress={() => setActiveTab('Target Planner')}
             activeOpacity={0.85}
             style={[
-              styles.targetStatusBox,
+              styles.overviewStatusBanner,
               {
                 backgroundColor: overallAdvice.status === 'safe' ? '#ECFDF5' : '#FFF1F2',
-                borderColor: overallAdvice.status === 'safe' ? '#A7F3D0' : '#FFE4E6',
+                borderColor: overallAdvice.status === 'safe' ? '#A7F3D0' : '#FECDD3',
               },
             ]}
           >
             <View
               style={[
-                styles.alertIconCircle,
+                styles.overviewStatusIconWrap,
                 { backgroundColor: overallAdvice.status === 'safe' ? '#10B981' : '#F43F5E' },
               ]}
             >
-              {overallAdvice.status === 'safe' ? (
-                <Ionicons name="checkmark" size={15} color="#FFFFFF" />
-              ) : (
-                <Text style={styles.alertExclamationMark}>!</Text>
-              )}
+              <Ionicons
+                name={overallAdvice.status === 'safe' ? 'checkmark' : 'alert'}
+                size={14}
+                color="#FFFFFF"
+              />
             </View>
-            <Text style={styles.targetStatusBoxText}>
-              {overallAdvice.status === 'safe' ? (
+            <Text style={styles.overviewStatusText}>
+              {stats.totalConducted === 0 ? (
+                'No classes marked yet. Use steppers below to add attendance.'
+              ) : overallAdvice.status === 'safe' ? (
                 <>
                   <Text style={{ fontWeight: '800', color: '#059669' }}>Safe Zone: </Text>
-                  You can bunk next{' '}
+                  You can safely bunk next{' '}
                   <Text style={{ fontWeight: '800', color: '#059669' }}>{overallAdvice.count}</Text>{' '}
-                  class(es) maintaining <Text style={{ fontWeight: '800' }}>{targetGoal}%</Text> target.
+                  class(es) maintaining {targetGoal}% target.
                 </>
               ) : (
                 <>
-                  <Text style={{ fontWeight: '800', color: '#E11D48' }}>Shortage Alert: </Text>
+                  <Text style={{ fontWeight: '800', color: '#DC2626' }}>Shortage Alert: </Text>
                   Attend next{' '}
-                  <Text style={{ fontWeight: '800', color: '#E11D48' }}>{overallAdvice.count}</Text>{' '}
-                  lecture(s) continuously to reach{' '}
-                  <Text style={{ fontWeight: '800' }}>{targetGoal}%</Text>.
+                  <Text style={{ fontWeight: '800', color: '#DC2626' }}>{overallAdvice.count}</Text>{' '}
+                  lecture(s) in a row to reach {targetGoal}%.
                 </>
               )}
             </Text>
             <Feather
               name="chevron-right"
-              size={16}
-              color={overallAdvice.status === 'safe' ? '#10B981' : '#F43F5E'}
+              size={15}
+              color={overallAdvice.status === 'safe' ? '#059669' : '#DC2626'}
             />
           </TouchableOpacity>
-        </View>
 
-        {/* 2x2 KPI METRICS GRID */}
-        <View style={styles.kpiGrid}>
-          {/* Card 1: Present % */}
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiHeader}>
-              <MaterialCommunityIcons name="chart-box-outline" size={16} color="#10B981" />
-              <Text style={styles.kpiLabel}>PRESENT %</Text>
-            </View>
-            <View style={styles.kpiBodyRow}>
-              <View>
-                <Text style={[styles.kpiValue, { color: '#059669' }]}>
-                  {stats.presentPct.toFixed(1)}%
+          {/* 3 Mathematically Connected Metrics: Attended + Missed = Total Held */}
+          <View style={styles.overviewMetricsRow}>
+            <View style={styles.overviewMetricCol}>
+              <Text style={styles.overviewMetricLabel}>ATTENDED</Text>
+              <View style={styles.overviewMetricValRow}>
+                <Ionicons name="checkmark-circle" size={15} color="#059669" />
+                <Text style={[styles.overviewMetricVal, { color: '#059669' }]}>
+                  {stats.totalPresent}
                 </Text>
-                <Text style={styles.kpiSubText}>Keep going!</Text>
               </View>
-              <CircularProgress percentage={stats.presentPct} color="#10B981" size={50} strokeWidth={5} />
             </View>
-          </View>
 
-          {/* Card 2: Average % */}
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiHeader}>
-              <MaterialCommunityIcons name="chart-line" size={16} color="#2563EB" />
-              <Text style={styles.kpiLabel}>AVERAGE %</Text>
-            </View>
-            <View style={styles.kpiBodyRow}>
-              <View>
-                <Text style={[styles.kpiValue, { color: '#2563EB' }]}>
-                  {stats.avgPct.toFixed(1)}%
+            <View style={styles.overviewMetricDivider} />
+
+            <View style={styles.overviewMetricCol}>
+              <Text style={styles.overviewMetricLabel}>MISSED</Text>
+              <View style={styles.overviewMetricValRow}>
+                <Ionicons name="close-circle" size={15} color="#DC2626" />
+                <Text style={[styles.overviewMetricVal, { color: '#DC2626' }]}>
+                  {stats.totalAbsent}
                 </Text>
-                <Text style={styles.kpiSubText}>Overall average</Text>
               </View>
-              <CircularProgress percentage={stats.avgPct} color="#2563EB" size={50} strokeWidth={5} />
             </View>
-          </View>
 
-          {/* Card 3: Attended */}
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiHeader}>
-              <Ionicons name="book-outline" size={15} color="#D97706" />
-              <Text style={styles.kpiLabel}>ATTENDED</Text>
-            </View>
-            <View style={styles.kpiBodyRow}>
-              <View>
-                <Text style={[styles.kpiValue, { color: '#D97706' }]}>{stats.totalPresent}</Text>
-                <Text style={styles.kpiSubText}>Total classes</Text>
-              </View>
-              <View style={styles.kpiAttendedIconWrap}>
-                <View style={styles.kpiAttendedInnerBadge}>
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                </View>
-              </View>
-            </View>
-          </View>
+            <View style={styles.overviewMetricDivider} />
 
-          {/* Card 4: Missed */}
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiHeader}>
-              <Ionicons name="calendar-outline" size={15} color="#DC2626" />
-              <Text style={styles.kpiLabel}>MISSED</Text>
-            </View>
-            <View style={styles.kpiBodyRow}>
-              <View>
-                <Text style={[styles.kpiValue, { color: '#DC2626' }]}>{stats.totalAbsent}</Text>
-                <Text style={styles.kpiSubText}>Total classes</Text>
-              </View>
-              <View style={styles.kpiMissedIconWrap}>
-                <View style={styles.kpiMissedInnerBadge}>
-                  <Ionicons name="close" size={14} color="#FFFFFF" />
-                </View>
+            <View style={styles.overviewMetricCol}>
+              <Text style={styles.overviewMetricLabel}>TOTAL HELD</Text>
+              <View style={styles.overviewMetricValRow}>
+                <MaterialCommunityIcons name="book-open-page-variant" size={15} color="#2563EB" />
+                <Text style={[styles.overviewMetricVal, { color: '#1E293B' }]}>
+                  {stats.totalConducted}
+                </Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* TARGET ATTENDANCE THRESHOLD CARD */}
-        <View style={styles.targetAdjustCard}>
-          <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
-            <Defs>
-              <LinearGradient id="targetCardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <Stop offset="0%" stopColor="#2563EB" />
-                <Stop offset="50%" stopColor="#4338CA" />
-                <Stop offset="100%" stopColor="#6366F1" />
-              </LinearGradient>
-            </Defs>
-            <Rect width="100%" height="100%" fill="url(#targetCardGrad)" />
-            <Circle cx="15%" cy="30%" r="90" fill="rgba(255,255,255,0.06)" />
-            <Circle cx="85%" cy="85%" r="75" fill="rgba(255,255,255,0.05)" />
-          </Svg>
-
-          <View style={styles.targetAdjustHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <MaterialCommunityIcons name="target" size={32} color="#FFFFFF" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.targetAdjustTitle}>Target Attendance Threshold</Text>
-                <Text style={styles.targetAdjustSub}>Tap or customize your institutional target:</Text>
-              </View>
+        {/* SLEEK TARGET THRESHOLD SELECTOR */}
+        <View style={styles.targetBarCard}>
+          <View style={styles.targetBarHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialCommunityIcons name="target" size={17} color="#2563EB" />
+              <Text style={styles.targetBarTitle}>Institutional Target</Text>
             </View>
-            <View style={styles.targetValueBadge}>
-              <MaterialCommunityIcons name="target" size={14} color="#D97706" />
-              <Text style={styles.targetValueBadgeText}>{targetGoal}%</Text>
+            <View style={styles.targetGoalPill}>
+              <Text style={styles.targetGoalPillText}>{targetGoal}% Goal</Text>
             </View>
           </View>
 
-          <View style={styles.targetBtnRow}>
+          <View style={styles.targetPillRow}>
             {[65, 75, 80, 85, 90].map((goal) => {
               const isSelected = targetGoal === goal;
               return (
                 <TouchableOpacity
                   key={goal}
                   onPress={() => setTargetGoal(goal)}
-                  style={[styles.targetChoiceBtn, isSelected && styles.targetChoiceBtnActive]}
+                  style={[styles.targetPillBtn, isSelected && styles.targetPillBtnActive]}
                   activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.targetChoiceText,
-                      isSelected && styles.targetChoiceTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.targetPillText, isSelected && styles.targetPillTextActive]}>
                     {goal}%
                   </Text>
                 </TouchableOpacity>
@@ -1085,7 +1028,7 @@ export default function AttendanceTrackerApp() {
               color={activeTab === 'Target Planner' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Target Planner' && styles.tabButtonTextActive]}>
-              Target Planner
+              Planner
             </Text>
           </TouchableOpacity>
 
@@ -1119,10 +1062,11 @@ export default function AttendanceTrackerApp() {
               </TouchableOpacity>
             </View>
 
-            <View style={{ gap: 12 }}>
+            <View style={{ gap: 14 }}>
               {courses.map((course) => {
                 const subPct = course.total === 0 ? 0 : (course.present / course.total) * 100;
                 const isBelow = subPct < targetGoal && course.total > 0;
+                const advice = calculateGoalAdvice(course.present, course.total, targetGoal);
 
                 return (
                   <View key={course.id} style={[styles.courseCard, { borderLeftColor: course.color }]}>
@@ -1153,12 +1097,11 @@ export default function AttendanceTrackerApp() {
                           <Text
                             style={[
                               styles.coursePctText,
-                              { color: isBelow ? '#EF4444' : '#059669' },
+                              { color: isBelow ? '#DC2626' : '#059669' },
                             ]}
                           >
-                            {subPct.toFixed(1)}%
+                            {subPct.toFixed(2)}%
                           </Text>
-                          <Feather name="chevron-right" size={16} color="#94A3B8" />
                         </View>
                         <TouchableOpacity
                           onPress={() => openCourseModal(course)}
@@ -1168,6 +1111,41 @@ export default function AttendanceTrackerApp() {
                           <Feather name="edit-2" size={13} color="#94A3B8" />
                         </TouchableOpacity>
                       </View>
+                    </View>
+
+                    {/* Visual Progress Bar */}
+                    <View style={styles.courseProgressTrack}>
+                      <View
+                        style={[
+                          styles.courseProgressFill,
+                          {
+                            width: `${Math.min(100, Math.max(0, subPct))}%`,
+                            backgroundColor: isBelow ? '#DC2626' : '#10B981',
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    {/* Stats & Advice Row */}
+                    <View style={styles.courseAdviceRow}>
+                      <Text style={styles.courseRatioText}>
+                        {course.present} of {course.total} classes attended
+                      </Text>
+                      <Text
+                        style={[
+                          styles.courseAdvicePill,
+                          {
+                            color: isBelow ? '#DC2626' : '#059669',
+                            backgroundColor: isBelow ? '#FFF1F2' : '#ECFDF5',
+                          },
+                        ]}
+                      >
+                        {course.total === 0
+                          ? 'Not started'
+                          : advice.status === 'safe'
+                          ? `Safe: ${advice.count} bunks`
+                          : `Need: ${advice.count} in a row`}
+                      </Text>
                     </View>
 
                     {/* Stepper Controls */}
@@ -1180,7 +1158,7 @@ export default function AttendanceTrackerApp() {
                             style={styles.stepBtnMinus}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="remove" size={14} color="#64748B" />
+                            <Ionicons name="remove" size={16} color="#64748B" />
                           </TouchableOpacity>
                           <Text style={styles.stepNumberText}>{course.present}</Text>
                           <TouchableOpacity
@@ -1188,10 +1166,12 @@ export default function AttendanceTrackerApp() {
                             style={styles.stepBtnPlusPresent}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="add" size={16} color="#059669" />
+                            <Ionicons name="add" size={18} color="#059669" />
                           </TouchableOpacity>
                         </View>
                       </View>
+
+                      <View style={styles.stepperDivider} />
 
                       <View style={styles.stepperBox}>
                         <Text style={styles.stepperLabel}>Total Held</Text>
@@ -1201,7 +1181,7 @@ export default function AttendanceTrackerApp() {
                             style={styles.stepBtnMinus}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="remove" size={14} color="#64748B" />
+                            <Ionicons name="remove" size={16} color="#64748B" />
                           </TouchableOpacity>
                           <Text style={styles.stepNumberText}>{course.total}</Text>
                           <TouchableOpacity
@@ -1209,7 +1189,7 @@ export default function AttendanceTrackerApp() {
                             style={styles.stepBtnPlusTotal}
                             activeOpacity={0.7}
                           >
-                            <Ionicons name="add" size={16} color="#2563EB" />
+                            <Ionicons name="add" size={18} color="#2563EB" />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1484,25 +1464,59 @@ export default function AttendanceTrackerApp() {
                       <Text
                         style={[
                           styles.plannerPctText,
-                          { color: pct >= targetGoal ? '#10B981' : '#E11D48' },
+                          { color: pct >= targetGoal ? '#059669' : '#DC2626' },
                         ]}
                       >
-                        {pct.toFixed(1)}%
+                        {pct.toFixed(2)}%
                       </Text>
                     </View>
 
-                    <View style={styles.plannerAdviceBox}>
+                    <Text style={styles.plannerRatioText}>
+                      {course.present} of {course.total} classes attended
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.plannerAdviceBox,
+                        {
+                          backgroundColor:
+                            course.total === 0
+                              ? '#F8FAFC'
+                              : advice.status === 'safe'
+                              ? '#ECFDF5'
+                              : '#FFF1F2',
+                          borderColor:
+                            course.total === 0
+                              ? '#E2E8F0'
+                              : advice.status === 'safe'
+                              ? '#A7F3D0'
+                              : '#FECDD3',
+                        },
+                      ]}
+                    >
                       <FontAwesome5
                         name={advice.status === 'safe' ? 'umbrella-beach' : 'running'}
                         size={13}
-                        color={advice.status === 'safe' ? '#10B981' : '#E11D48'}
+                        color={advice.status === 'safe' ? '#059669' : '#DC2626'}
                       />
-                      <Text style={styles.plannerAdviceText}>
+                      <Text
+                        style={[
+                          styles.plannerAdviceText,
+                          {
+                            color:
+                              course.total === 0
+                                ? '#64748B'
+                                : advice.status === 'safe'
+                                ? '#065F46'
+                                : '#9F1239',
+                          },
+                        ]}
+                      >
                         {course.total === 0
                           ? 'No class attendance marked yet.'
                           : advice.status === 'safe'
-                          ? `Safe Zone: You can safely bunk ${advice.count} more class(es).`
-                          : `Shortage Alert: Must attend next ${advice.count} lecture(s) continuously.`}
+                          ? `Safe Zone: You can safely bunk next ${advice.count} class(es).`
+                          : `Shortage Alert: Must attend next ${advice.count} lecture(s) in a row.`}
                       </Text>
                     </View>
                   </View>
@@ -1899,254 +1913,175 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
     backgroundColor: '#EF4444',
   },
-  profileBanner: {
+  overviewHeroCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
-    padding: 16,
+    padding: 18,
     marginHorizontal: 16,
-    marginTop: -28,
+    marginTop: -24,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.07,
     shadowRadius: 16,
     elevation: 4,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
-  profileBannerTop: {
+  overviewTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
   },
-  verifiedTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 14,
-  },
-  verifiedTagText: {
-    color: '#059669',
-    fontSize: 10,
+  overviewCardLabel: {
+    color: '#64748B',
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
-  editBioBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  overviewBigPct: {
+    fontSize: 34,
+    fontWeight: '900',
+    marginTop: 4,
+    letterSpacing: -0.5,
   },
-  editBioBtnText: {
+  overviewGoalTag: {
+    backgroundColor: '#EFF6FF',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  overviewGoalTagText: {
     color: '#2563EB',
-    fontSize: 12,
+    fontSize: 10.5,
     fontWeight: '700',
   },
-  collegeBuildingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  collegeBuildingBadge: {
-    width: 72,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  collegeText: {
-    color: '#0F172A',
-    fontSize: 15.5,
-    fontWeight: '800',
-    lineHeight: 21,
-  },
-  degreeText: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 3,
-  },
-  targetStatusBox: {
+  overviewStatusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderRadius: 14,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    marginTop: 12,
+    marginTop: 14,
     borderWidth: 1,
   },
-  alertIconCircle: {
+  overviewStatusIconWrap: {
     width: 24,
     height: 24,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  alertExclamationMark: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-    fontSize: 14,
-    lineHeight: 16,
-  },
-  targetStatusBoxText: {
+  overviewStatusText: {
     flex: 1,
     color: '#334155',
-    fontSize: 11.5,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 17,
   },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginTop: 12,
-    gap: 10,
-  },
-  kpiCard: {
-    width: '48.5%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 13,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  kpiHeader: {
+  overviewMetricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  kpiLabel: {
+  overviewMetricCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  overviewMetricLabel: {
     color: '#64748B',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  kpiBodyRow: {
+  overviewMetricValRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    gap: 5,
   },
-  kpiValue: {
-    fontSize: 22,
+  overviewMetricVal: {
+    fontSize: 18,
     fontWeight: '900',
   },
-  kpiSubText: {
-    color: '#64748B',
-    fontSize: 10.5,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  kpiAttendedIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  kpiAttendedInnerBadge: {
-    width: 24,
+  overviewMetricDivider: {
+    width: 1,
     height: 24,
-    borderRadius: 7,
-    backgroundColor: '#F59E0B',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#E2E8F0',
   },
-  kpiMissedIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FFE4E6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  kpiMissedInnerBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
-    backgroundColor: '#F43F5E',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  targetAdjustCard: {
+  targetBarCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
     marginHorizontal: 16,
     marginTop: 12,
-    borderRadius: 20,
-    padding: 16,
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#4338CA',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  targetAdjustHeader: {
+  targetBarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
   },
-  targetAdjustTitle: {
-    color: '#FFFFFF',
-    fontSize: 14.5,
+  targetBarTitle: {
+    color: '#0F172A',
+    fontSize: 13.5,
     fontWeight: '800',
   },
-  targetAdjustSub: {
-    color: 'rgba(255, 255, 255, 0.85)',
+  targetGoalPill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  targetGoalPillText: {
+    color: '#2563EB',
     fontSize: 11,
-    marginTop: 2,
+    fontWeight: '800',
   },
-  targetValueBadge: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 16,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  targetValueBadgeText: {
-    color: '#D97706',
-    fontWeight: '900',
-    fontSize: 12.5,
-  },
-  targetBtnRow: {
+  targetPillRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 7,
-    marginTop: 14,
+    gap: 8,
   },
-  targetChoiceBtn: {
+  targetPillBtn: {
     flex: 1,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
+    paddingVertical: 9,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  targetChoiceBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+  targetPillBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+    shadowColor: '#2563EB',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
-  targetChoiceText: {
-    color: 'rgba(255, 255, 255, 0.95)',
-    fontSize: 12.5,
+  targetPillText: {
+    color: '#64748B',
+    fontSize: 12,
     fontWeight: '700',
   },
-  targetChoiceTextActive: {
-    color: '#4338CA',
+  targetPillTextActive: {
+    color: '#FFFFFF',
     fontWeight: '900',
   },
   tabContainer: {
@@ -2282,80 +2217,105 @@ const styles = StyleSheet.create({
   cardEditIconBtn: {
     padding: 3,
   },
-  progressTrack: {
+  courseProgressTrack: {
     height: 6,
-    backgroundColor: '#EEF3F8',
+    backgroundColor: '#F1F5F9',
     borderRadius: 3,
-    marginVertical: 12,
+    marginTop: 10,
+    marginBottom: 8,
     overflow: 'hidden',
   },
-  progressFill: {
+  courseProgressFill: {
     height: '100%',
     borderRadius: 3,
+  },
+  courseAdviceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  courseRatioText: {
+    color: '#64748B',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  courseAdvicePill: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   stepperContainer: {
     backgroundColor: '#F8FAFC',
     borderRadius: 14,
-    padding: 7,
-    marginTop: 12,
+    padding: 8,
+    marginTop: 4,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   stepperBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
   },
   stepperLabel: {
-    color: '#64748B',
+    color: '#475569',
     fontSize: 11.5,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   stepperActionGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  stepperDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#E2E8F0',
   },
   stepBtnMinus: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: '#E2E8F0',
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepBtnPlusPresent: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: '#D1FAE5',
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepBtnPlusTotal: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepBtnPlus: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: '#D1FAE5',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepNumberText: {
     color: '#0F172A',
-    fontSize: 13.5,
+    fontSize: 14.5,
     fontWeight: '800',
-    minWidth: 16,
+    minWidth: 22,
     textAlign: 'center',
   },
   daySelectorRow: {
@@ -2497,6 +2457,12 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '900',
     marginLeft: 8,
+  },
+  plannerRatioText: {
+    color: '#64748B',
+    fontSize: 11.5,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   plannerAdviceBox: {
     flexDirection: 'row',
@@ -2690,9 +2656,24 @@ const styles = StyleSheet.create({
   },
   timetableBadgeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  verifiedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 14,
+  },
+  verifiedTagText: {
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   expandIconBtn: {
     flexDirection: 'row',
