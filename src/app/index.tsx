@@ -180,12 +180,12 @@ function CircularProgress({
         <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
           <Text
             style={{
-              fontSize: size >= 70 ? 13 : 10,
+              fontSize: size >= 70 ? 12.5 : size >= 60 ? 11 : 9.5,
               fontWeight: '900',
               color: '#0F172A',
             }}
           >
-            {percentage.toFixed(size >= 70 ? 2 : 1)}%
+            {percentage.toFixed(size >= 60 ? 2 : 1)}%
           </Text>
         </View>
       )}
@@ -812,7 +812,7 @@ export default function AttendanceTrackerApp() {
                 onPress={() => {
                   Alert.alert(
                     'Attendance Overview',
-                    `${profile.name}, your overall attendance is ${stats.presentPct.toFixed(2)}%. Target is ${targetGoal}%. ${overallAdvice.status === 'safe' ? `You can safely bunk ${overallAdvice.count} classes.` : `Attend next ${overallAdvice.count} lectures in a row to reach goal.`}`,
+                    `${profile.name}, your overall attendance is ${stats.presentPct.toFixed(2)}% with a subject average of ${stats.avgPct.toFixed(2)}%. Target is ${targetGoal}%. ${overallAdvice.status === 'safe' ? `You can safely bunk ${overallAdvice.count} classes.` : `Attend next ${overallAdvice.count} lectures in a row to reach goal.`}`,
                     [{ text: 'OK' }]
                   );
                 }}
@@ -838,32 +838,109 @@ export default function AttendanceTrackerApp() {
           <View style={styles.overviewTopRow}>
             <View style={{ flex: 1, paddingRight: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialCommunityIcons name="chart-arc" size={16} color="#2563EB" />
-                <Text style={styles.overviewCardLabel}>OVERALL ATTENDANCE</Text>
+                <MaterialCommunityIcons name="chart-arc" size={17} color="#2563EB" />
+                <Text style={styles.overviewCardLabel}>ATTENDANCE PERFORMANCE</Text>
               </View>
-              <Text
-                style={[
-                  styles.overviewBigPct,
-                  { color: stats.presentPct >= targetGoal ? '#059669' : '#DC2626' },
-                ]}
-              >
-                {stats.presentPct.toFixed(2)}%
+              <Text style={styles.overviewCardSub}>
+                {stats.presentPct >= targetGoal
+                  ? `Safely above your ${targetGoal}% institutional goal`
+                  : `Shortage: ${(targetGoal - stats.presentPct).toFixed(2)}% below ${targetGoal}% goal`}
               </Text>
-              <View style={styles.overviewGoalTag}>
-                <Text style={styles.overviewGoalTagText}>
-                  {stats.presentPct >= targetGoal
-                    ? `Safely above ${targetGoal}% target`
-                    : `Shortage: ${(targetGoal - stats.presentPct).toFixed(2)}% below goal`}
-                </Text>
-              </View>
             </View>
 
             <CircularProgress
               percentage={stats.presentPct}
               color={stats.presentPct >= targetGoal ? '#10B981' : '#F43F5E'}
-              size={74}
-              strokeWidth={7}
+              size={66}
+              strokeWidth={6.5}
             />
+          </View>
+
+          {/* DUAL STATS: PRESENT % AND AVERAGE % */}
+          <View style={styles.twinPillRow}>
+            {/* PRESENT % */}
+            <View
+              style={[
+                styles.twinStatCard,
+                {
+                  borderColor: stats.presentPct >= targetGoal ? '#BBF7D0' : '#FECDD3',
+                },
+              ]}
+            >
+              <View style={styles.twinStatTop}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="checkmark-done-circle" size={13.5} color="#2563EB" />
+                  <Text style={styles.twinStatLabel}>PRESENT %</Text>
+                </View>
+                <View
+                  style={[
+                    styles.twinBadge,
+                    { backgroundColor: stats.presentPct >= targetGoal ? '#DCFCE7' : '#FEE2E2' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.twinBadgeText,
+                      { color: stats.presentPct >= targetGoal ? '#15803D' : '#B91C1C' },
+                    ]}
+                  >
+                    {stats.presentPct >= targetGoal ? 'Safe' : 'Short'}
+                  </Text>
+                </View>
+              </View>
+              <Text
+                style={[
+                  styles.twinStatValue,
+                  { color: stats.presentPct >= targetGoal ? '#059669' : '#DC2626' },
+                ]}
+              >
+                {stats.presentPct.toFixed(2)}%
+              </Text>
+              <Text style={styles.twinStatCaption}>Total Attended Ratio</Text>
+            </View>
+
+            {/* AVERAGE % */}
+            <View
+              style={[
+                styles.twinStatCard,
+                {
+                  borderColor: stats.avgPct >= targetGoal ? '#DDD6FE' : '#FECDD3',
+                },
+              ]}
+            >
+              <View style={styles.twinStatTop}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <MaterialCommunityIcons name="chart-bell-curve" size={13.5} color="#7C3AED" />
+                  <Text style={[styles.twinStatLabel, { color: '#7C3AED' }]}>AVERAGE %</Text>
+                </View>
+                <View
+                  style={[
+                    styles.twinBadge,
+                    { backgroundColor: stats.avgPct >= targetGoal ? '#EDE9FE' : '#FEE2E2' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.twinBadgeText,
+                      { color: stats.avgPct >= targetGoal ? '#5B21B6' : '#B91C1C' },
+                    ]}
+                  >
+                    Mean
+                  </Text>
+                </View>
+              </View>
+              <Text
+                style={[
+                  styles.twinStatValue,
+                  { color: stats.avgPct >= targetGoal ? '#6D28D9' : '#DC2626' },
+                ]}
+              >
+                {stats.avgPct.toFixed(2)}%
+              </Text>
+              <Text style={styles.twinStatCaption}>
+                Across {courses.filter((c) => c.total > 0).length} Subjects
+              </Text>
+            </View>
           </View>
 
           {/* Smart Safe/Shortage Banner */}
@@ -1937,6 +2014,59 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.8,
+  },
+  overviewCardSub: {
+    color: '#64748B',
+    fontSize: 11.5,
+    marginTop: 3,
+    fontWeight: '500',
+  },
+  twinPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  twinStatCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+  },
+  twinStatTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  twinStatLabel: {
+    color: '#2563EB',
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  twinBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  twinBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  twinStatValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    marginVertical: 2,
+  },
+  twinStatCaption: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '600',
   },
   overviewBigPct: {
     fontSize: 34,
