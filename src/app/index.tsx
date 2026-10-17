@@ -1210,47 +1210,6 @@ export default function AttendanceTrackerApp() {
           </View>
         </View>
 
-        {/* QUICK DAY IMPACT ANALYZER PILL BAR */}
-        <View style={styles.quickDayCard}>
-          <View style={styles.quickDayHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="flash" size={15} color="#2563EB" />
-              <Text style={styles.quickDayTitle}>Daily Timetable Impact Analyzer</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setActiveTab('Impact')}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.quickDayViewAll}>Open Impact Tab</Text>
-              <Feather name="chevron-right" size={13} color="#2563EB" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.quickDaySub}>
-            Click any day to see attendance gain if attended or loss if bunked:
-          </Text>
-          <View style={styles.quickDayBtnRow}>
-            {(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const).map((day) => {
-              const count = (timetable[day] || []).length;
-              return (
-                <TouchableOpacity
-                  key={day}
-                  onPress={() => {
-                    setAnalysisDay(day);
-                    setImpactMode('single');
-                    setActiveTab('Impact');
-                  }}
-                  style={styles.quickDayBtn}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.quickDayBtnText}>{day}</Text>
-                  <Text style={styles.quickDayCountText}>{count} class</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
         {/* FLOATING TAB NAVIGATION BAR */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
@@ -1260,11 +1219,14 @@ export default function AttendanceTrackerApp() {
           >
             <Ionicons
               name={activeTab === 'Classes' ? 'school' : 'school-outline'}
-              size={13}
+              size={17}
               color={activeTab === 'Classes' ? '#FFFFFF' : '#64748B'}
             />
-            <Text style={[styles.tabButtonText, activeTab === 'Classes' && styles.tabButtonTextActive]}>
-              Classes
+            <Text
+              style={[styles.tabButtonText, activeTab === 'Classes' && styles.tabButtonTextActive]}
+              numberOfLines={1}
+            >
+              Class
             </Text>
           </TouchableOpacity>
 
@@ -1275,11 +1237,14 @@ export default function AttendanceTrackerApp() {
           >
             <Feather
               name="calendar"
-              size={12}
+              size={16}
               color={activeTab === 'Schedule' ? '#FFFFFF' : '#64748B'}
             />
-            <Text style={[styles.tabButtonText, activeTab === 'Schedule' && styles.tabButtonTextActive]}>
-              Schedule
+            <Text
+              style={[styles.tabButtonText, activeTab === 'Schedule' && styles.tabButtonTextActive]}
+              numberOfLines={1}
+            >
+              Subject
             </Text>
           </TouchableOpacity>
 
@@ -1290,10 +1255,13 @@ export default function AttendanceTrackerApp() {
           >
             <Ionicons
               name={activeTab === 'Impact' ? 'flash' : 'flash-outline'}
-              size={13}
+              size={17}
               color={activeTab === 'Impact' ? '#FFFFFF' : '#64748B'}
             />
-            <Text style={[styles.tabButtonText, activeTab === 'Impact' && styles.tabButtonTextActive]}>
+            <Text
+              style={[styles.tabButtonText, activeTab === 'Impact' && styles.tabButtonTextActive]}
+              numberOfLines={1}
+            >
               Impact
             </Text>
           </TouchableOpacity>
@@ -1305,10 +1273,13 @@ export default function AttendanceTrackerApp() {
           >
             <MaterialCommunityIcons
               name="target"
-              size={13}
+              size={17}
               color={activeTab === 'Target Planner' ? '#FFFFFF' : '#64748B'}
             />
-            <Text style={[styles.tabButtonText, activeTab === 'Target Planner' && styles.tabButtonTextActive]}>
+            <Text
+              style={[styles.tabButtonText, activeTab === 'Target Planner' && styles.tabButtonTextActive]}
+              numberOfLines={1}
+            >
               Planner
             </Text>
           </TouchableOpacity>
@@ -1320,10 +1291,13 @@ export default function AttendanceTrackerApp() {
           >
             <Feather
               name="settings"
-              size={12}
+              size={16}
               color={activeTab === 'Manage' ? '#FFFFFF' : '#64748B'}
             />
-            <Text style={[styles.tabButtonText, activeTab === 'Manage' && styles.tabButtonTextActive]}>
+            <Text
+              style={[styles.tabButtonText, activeTab === 'Manage' && styles.tabButtonTextActive]}
+              numberOfLines={1}
+            >
               Manage
             </Text>
           </TouchableOpacity>
@@ -2932,28 +2906,29 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     marginTop: 14,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 4,
-    justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
   },
   tabButton: {
-    flexDirection: 'row',
+    flex: 1,
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 18,
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 7,
+    paddingHorizontal: 2,
+    borderRadius: 14,
   },
   tabButtonActive: {
     backgroundColor: '#2563EB',
@@ -2965,12 +2940,13 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     color: '#64748B',
-    fontSize: 11.5,
-    fontWeight: '600',
+    fontSize: 10.5,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   tabButtonTextActive: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontWeight: '900',
   },
   tabContentWrapper: {
     marginHorizontal: 16,
