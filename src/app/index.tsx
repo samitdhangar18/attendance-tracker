@@ -133,6 +133,8 @@ const INITIAL_TIMETABLE: Record<string, TimetableSlot[]> = {
   ],
 };
 
+const round2 = (val: number): number => Math.round((val + Number.EPSILON) * 100) / 100;
+
 function CircularProgress({
   percentage,
   color,
@@ -174,8 +176,16 @@ function CircularProgress({
         />
       </Svg>
       <View style={{ position: 'absolute' }}>
-        <Text style={{ fontSize: size >= 70 ? 12 : 9, fontWeight: '800', color: '#1E293B' }}>
-          {percentage.toFixed(2)}%
+        <Text
+          style={{
+            fontSize: size >= 70 ? 12 : 8,
+            fontWeight: '800',
+            color: '#1E293B',
+            textAlign: 'center',
+          }}
+          numberOfLines={1}
+        >
+          {round2(percentage).toFixed(2)}%
         </Text>
       </View>
     </View>
@@ -287,7 +297,9 @@ export default function AttendanceTrackerApp() {
   const [fullScreenImageVisible, setFullScreenImageVisible] = useState(false);
   const [scheduleViewMode, setScheduleViewMode] = useState<'photo' | 'slots'>('photo');
   const [targetGoal, setTargetGoal] = useState<number>(65);
-  const [activeTab, setActiveTab] = useState<'Classes' | 'Schedule' | 'Target Planner' | 'Manage'>('Classes');
+  const [activeTab, setActiveTab] = useState<'Classes' | 'Schedule' | 'Impact' | 'Target Planner' | 'Manage'>('Classes');
+  const [impactMode, setImpactMode] = useState<'single' | 'multi'>('single');
+  const [multiDaysInput, setMultiDaysInput] = useState<number>(6);
   const [analysisDay, setAnalysisDay] = useState<string>(() => {
     const dayIndex = new Date().getDay();
     const days = ['Mon', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -450,22 +462,24 @@ export default function AttendanceTrackerApp() {
     setProfileModalVisible(true);
   };
 
-  // Dynamic Mathematical Calculations
+  // Dynamic Mathematical Calculations - Accurate 2-decimal rounded precision
   const stats = useMemo(() => {
     const totalConducted = courses.reduce((acc, c) => acc + Number(c.total || 0), 0);
     const totalPresent = courses.reduce((acc, c) => acc + Number(c.present || 0), 0);
     const totalAbsent = Math.max(0, totalConducted - totalPresent);
 
     // Present Percentage (Total Present / Total Conducted)
-    const presentPct = totalConducted === 0 ? 0 : (totalPresent / totalConducted) * 100;
+    const presentPct = totalConducted === 0 ? 0 : round2((totalPresent / totalConducted) * 100);
 
     // Average Percentage Across All Subjects with at least 1 class
     const coursesWithClasses = courses.filter((c) => c.total > 0);
     const avgPct =
       coursesWithClasses.length === 0
         ? 0
-        : coursesWithClasses.reduce((acc, c) => acc + (c.present / c.total) * 100, 0) /
-          coursesWithClasses.length;
+        : round2(
+            coursesWithClasses.reduce((acc, c) => acc + round2((c.present / c.total) * 100), 0) /
+              coursesWithClasses.length
+          );
 
     return {
       totalConducted,
@@ -497,20 +511,30 @@ export default function AttendanceTrackerApp() {
     );
   };
 
-  // Target Attendance Math (Bunk or Attend more) - Exact Integer Arithmetic
+  // Target Attendance Math (Bunk or Attend more) - Exact Integer Arithmetic with 2-digit boundary verification
   const calculateGoalAdvice = (present: number, total: number, target: number) => {
     if (total === 0 || target <= 0) return { status: 'none', count: 0 };
-    const currentPct = (present / total) * 100;
+    const currentPct = round2((present / total) * 100);
 
     if (currentPct >= target) {
-      const canBunk = Math.floor((100 * present - target * total) / target);
+      let canBunk = Math.floor((100 * present - target * total) / target);
+      if (canBunk < 0) canBunk = 0;
+      while (canBunk > 0 && round2((present / (total + canBunk)) * 100) < target) {
+        canBunk--;
+      }
       return { status: 'safe', count: Math.max(0, canBunk) };
     } else {
       if (target >= 100) return { status: 'short', count: 999 };
       const diff = target * total - 100 * present;
       const divisor = 100 - target;
-      const needToAttend = Math.ceil(diff / divisor);
-      return { status: 'short', count: Math.max(1, needToAttend) };
+      let needToAttend = Math.max(1, Math.ceil(diff / divisor));
+      while (
+        needToAttend > 1 &&
+        round2(((present + (needToAttend - 1)) / (total + (needToAttend - 1))) * 100) >= target
+      ) {
+        needToAttend--;
+      }
+      return { status: 'short', count: needToAttend };
     }
   };
 
@@ -521,7 +545,7 @@ export default function AttendanceTrackerApp() {
     const classCount = daySlots.length;
     const currentTotal = stats.totalConducted;
     const currentPresent = stats.totalPresent;
-    const currentPct = stats.presentPct;
+    const currentPct = round2(stats.presentPct);
 
     if (classCount === 0) {
       return {
@@ -544,14 +568,14 @@ export default function AttendanceTrackerApp() {
     // Scenario 1: Attend All classes on this day
     const attendNewTotal = currentTotal + classCount;
     const attendNewPresent = currentPresent + classCount;
-    const attendNewPct = attendNewTotal === 0 ? 0 : (attendNewPresent / attendNewTotal) * 100;
-    const attendDelta = attendNewPct - currentPct;
+    const attendNewPct = attendNewTotal === 0 ? 0 : round2((attendNewPresent / attendNewTotal) * 100);
+    const attendDelta = round2(attendNewPct - currentPct);
 
     // Scenario 2: Bunk / Miss All classes on this day
     const bunkNewTotal = currentTotal + classCount;
     const bunkNewPresent = currentPresent;
-    const bunkNewPct = bunkNewTotal === 0 ? 0 : (bunkNewPresent / bunkNewTotal) * 100;
-    const bunkDelta = bunkNewPct - currentPct;
+    const bunkNewPct = bunkNewTotal === 0 ? 0 : round2((bunkNewPresent / bunkNewTotal) * 100);
+    const bunkDelta = round2(bunkNewPct - currentPct);
 
     // Scenario 3: Custom Interactive Simulation
     let customAttendCount = 0;
@@ -567,8 +591,8 @@ export default function AttendanceTrackerApp() {
 
     const customNewTotal = currentTotal + classCount;
     const customNewPresent = currentPresent + customAttendCount;
-    const customNewPct = customNewTotal === 0 ? 0 : (customNewPresent / customNewTotal) * 100;
-    const customDelta = customNewPct - currentPct;
+    const customNewPct = customNewTotal === 0 ? 0 : round2((customNewPresent / customNewTotal) * 100);
+    const customDelta = round2(customNewPct - currentPct);
 
     // Slot-by-slot subject breakdown
     const slotBreakdown = daySlots.map((slot) => {
@@ -590,13 +614,13 @@ export default function AttendanceTrackerApp() {
 
       const cPresent = matched.present;
       const cTotal = matched.total;
-      const currentSubPct = cTotal === 0 ? 0 : (cPresent / cTotal) * 100;
+      const currentSubPct = cTotal === 0 ? 0 : round2((cPresent / cTotal) * 100);
 
-      const attendSubPct = ((cPresent + 1) / (cTotal + 1)) * 100;
-      const attendSubDelta = attendSubPct - currentSubPct;
+      const attendSubPct = round2(((cPresent + 1) / (cTotal + 1)) * 100);
+      const attendSubDelta = round2(attendSubPct - currentSubPct);
 
-      const bunkSubPct = (cPresent / (cTotal + 1)) * 100;
-      const bunkSubDelta = bunkSubPct - currentSubPct;
+      const bunkSubPct = round2((cPresent / (cTotal + 1)) * 100);
+      const bunkSubDelta = round2(bunkSubPct - currentSubPct);
 
       return {
         slot,
@@ -636,6 +660,70 @@ export default function AttendanceTrackerApp() {
       slotBreakdown,
     };
   }, [daySlots, stats, courses, simulatedSlotStatus]);
+
+  // Multi-Day Timetable Attendance Impact Analysis (e.g. Next N Days sequence)
+  const DAYS_ORDER: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat')[] = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+  ];
+
+  const multiDayAnalysis = useMemo(() => {
+    const daysCount = Math.max(1, Math.min(30, multiDaysInput || 1));
+    const startIdx = DAYS_ORDER.indexOf(analysisDay as any) >= 0 ? DAYS_ORDER.indexOf(analysisDay as any) : 0;
+
+    let totalScheduledClasses = 0;
+    const daysSequence: { day: string; count: number; subjects: string[] }[] = [];
+
+    for (let i = 0; i < daysCount; i++) {
+      const dayName = DAYS_ORDER[(startIdx + i) % DAYS_ORDER.length];
+      const slots = timetable[dayName] || [];
+      totalScheduledClasses += slots.length;
+      daysSequence.push({
+        day: dayName,
+        count: slots.length,
+        subjects: slots.map((s) => s.subject),
+      });
+    }
+
+    const currentTotal = stats.totalConducted;
+    const currentPresent = stats.totalPresent;
+    const currentPct = round2(stats.presentPct);
+
+    // If Attend All
+    const attendTotal = currentTotal + totalScheduledClasses;
+    const attendPresent = currentPresent + totalScheduledClasses;
+    const attendNewPct = attendTotal === 0 ? 0 : round2((attendPresent / attendTotal) * 100);
+    const attendDelta = round2(attendNewPct - currentPct);
+
+    // If Bunk / Absent All
+    const bunkTotal = currentTotal + totalScheduledClasses;
+    const bunkPresent = currentPresent;
+    const bunkNewPct = bunkTotal === 0 ? 0 : round2((bunkPresent / bunkTotal) * 100);
+    const bunkDelta = round2(bunkNewPct - currentPct);
+
+    return {
+      daysCount,
+      totalScheduledClasses,
+      daysSequence,
+      currentPct,
+      attendAll: {
+        newPct: attendNewPct,
+        delta: attendDelta,
+        newPresent: attendPresent,
+        newTotal: attendTotal,
+      },
+      bunkAll: {
+        newPct: bunkNewPct,
+        delta: bunkDelta,
+        newPresent: bunkPresent,
+        newTotal: bunkTotal,
+      },
+    };
+  }, [multiDaysInput, analysisDay, timetable, stats]);
 
   const toggleSlotSimulation = (slotId: string) => {
     setSimulatedSlotStatus((prev) => {
@@ -1130,11 +1218,11 @@ export default function AttendanceTrackerApp() {
               <Text style={styles.quickDayTitle}>Daily Timetable Impact Analyzer</Text>
             </View>
             <TouchableOpacity
-              onPress={() => setActiveTab('Target Planner')}
+              onPress={() => setActiveTab('Impact')}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
               activeOpacity={0.7}
             >
-              <Text style={styles.quickDayViewAll}>View Full Analysis</Text>
+              <Text style={styles.quickDayViewAll}>Open Impact Tab</Text>
               <Feather name="chevron-right" size={13} color="#2563EB" />
             </TouchableOpacity>
           </View>
@@ -1149,7 +1237,8 @@ export default function AttendanceTrackerApp() {
                   key={day}
                   onPress={() => {
                     setAnalysisDay(day);
-                    setActiveTab('Target Planner');
+                    setImpactMode('single');
+                    setActiveTab('Impact');
                   }}
                   style={styles.quickDayBtn}
                   activeOpacity={0.8}
@@ -1171,7 +1260,7 @@ export default function AttendanceTrackerApp() {
           >
             <Ionicons
               name={activeTab === 'Classes' ? 'school' : 'school-outline'}
-              size={15}
+              size={13}
               color={activeTab === 'Classes' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Classes' && styles.tabButtonTextActive]}>
@@ -1186,11 +1275,26 @@ export default function AttendanceTrackerApp() {
           >
             <Feather
               name="calendar"
-              size={14}
+              size={12}
               color={activeTab === 'Schedule' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Schedule' && styles.tabButtonTextActive]}>
               Schedule
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('Impact')}
+            style={[styles.tabButton, activeTab === 'Impact' && styles.tabButtonActive]}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={activeTab === 'Impact' ? 'flash' : 'flash-outline'}
+              size={13}
+              color={activeTab === 'Impact' ? '#FFFFFF' : '#64748B'}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'Impact' && styles.tabButtonTextActive]}>
+              Impact
             </Text>
           </TouchableOpacity>
 
@@ -1201,11 +1305,11 @@ export default function AttendanceTrackerApp() {
           >
             <MaterialCommunityIcons
               name="target"
-              size={15}
+              size={13}
               color={activeTab === 'Target Planner' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Target Planner' && styles.tabButtonTextActive]}>
-              Target Planner
+              Planner
             </Text>
           </TouchableOpacity>
 
@@ -1216,7 +1320,7 @@ export default function AttendanceTrackerApp() {
           >
             <Feather
               name="settings"
-              size={14}
+              size={12}
               color={activeTab === 'Manage' ? '#FFFFFF' : '#64748B'}
             />
             <Text style={[styles.tabButtonText, activeTab === 'Manage' && styles.tabButtonTextActive]}>
@@ -1553,7 +1657,8 @@ export default function AttendanceTrackerApp() {
                   <TouchableOpacity
                     onPress={() => {
                       setAnalysisDay(selectedDay);
-                      setActiveTab('Target Planner');
+                      setImpactMode('single');
+                      setActiveTab('Impact');
                     }}
                     style={styles.scheduleAnalyzeBtn}
                     activeOpacity={0.8}
@@ -1578,29 +1683,79 @@ export default function AttendanceTrackerApp() {
           </View>
         )}
 
-        {/* TAB 3: TARGET PLANNER */}
-        {activeTab === 'Target Planner' && (
+        {/* TAB 3: IMPACT ANALYZER (SEPARATE TAB) */}
+        {activeTab === 'Impact' && (
           <View style={styles.tabContentWrapper}>
-            {/* SECTION 1: TIMETABLE DAY-BY-DAY ATTENDANCE IMPACT ANALYZER */}
             <View style={styles.analyzerContainer}>
               <View style={styles.analyzerHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                   <View style={styles.analyzerIconOrb}>
-                    <MaterialCommunityIcons name="calculator-variant-outline" size={20} color="#2563EB" />
+                    <Ionicons name="flash" size={20} color="#2563EB" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.analyzerMainTitle}>Timetable Day Impact Analyzer</Text>
+                    <Text style={styles.analyzerMainTitle}>Timetable Impact Analyzer</Text>
                     <Text style={styles.analyzerSubtitle}>
-                      Select an individual day to analyze attendance gain or loss:
+                      Analyze attendance gain if attended or loss if bunked
                     </Text>
                   </View>
                 </View>
-                <View style={styles.analyzerDayBadge}>
-                  <Text style={styles.analyzerDayBadgeText}>
-                    {analysisDay} • {dayAnalysis.classCount} Classes
-                  </Text>
-                </View>
               </View>
+
+              {/* Mode Switcher: Single Day vs Multi-Day */}
+              <View style={styles.impactModeToggleRow}>
+                <TouchableOpacity
+                  onPress={() => setImpactMode('single')}
+                  style={[styles.impactModeBtn, impactMode === 'single' && styles.impactModeBtnActive]}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={14}
+                    color={impactMode === 'single' ? '#2563EB' : '#64748B'}
+                  />
+                  <Text
+                    style={[
+                      styles.impactModeBtnText,
+                      impactMode === 'single' && styles.impactModeBtnTextActive,
+                    ]}
+                  >
+                    Single Day
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setImpactMode('multi')}
+                  style={[styles.impactModeBtn, impactMode === 'multi' && styles.impactModeBtnActive]}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="trending-up"
+                    size={14}
+                    color={impactMode === 'multi' ? '#2563EB' : '#64748B'}
+                  />
+                  <Text
+                    style={[
+                      styles.impactModeBtnText,
+                      impactMode === 'multi' && styles.impactModeBtnTextActive,
+                    ]}
+                  >
+                    Multi-Day (e.g. 6 Days)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {impactMode === 'single' ? (
+                <>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={{ color: '#64748B', fontSize: 11.5, fontWeight: '600' }}>
+                      Select day to calculate gain/loss:
+                    </Text>
+                    <View style={styles.analyzerDayBadge}>
+                      <Text style={styles.analyzerDayBadgeText}>
+                        {analysisDay} • {dayAnalysis.classCount} Classes
+                      </Text>
+                    </View>
+                  </View>
 
               {/* Clickable Day Selector Pills */}
               <View style={styles.analyzerDayRow}>
@@ -1873,10 +2028,227 @@ export default function AttendanceTrackerApp() {
                   </View>
                 </View>
               )}
+                </>
+              ) : (
+                /* MULTI-DAY CONSECUTIVE PROJECTION */
+                <View style={{ gap: 12 }}>
+                  <Text style={{ color: '#475569', fontSize: 12, lineHeight: 17 }}>
+                    Calculate cumulative attendance impact for upcoming timetable days starting from {analysisDay}:
+                  </Text>
+
+                  {/* Preset Day Chips */}
+                  <View style={styles.multiPresetRow}>
+                    {[1, 2, 3, 5, 6, 7].map((num) => (
+                      <TouchableOpacity
+                        key={num}
+                        onPress={() => setMultiDaysInput(num)}
+                        style={[
+                          styles.multiPresetBtn,
+                          multiDaysInput === num && styles.multiPresetBtnActive,
+                        ]}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.multiPresetBtnText,
+                            multiDaysInput === num && styles.multiPresetBtnTextActive,
+                          ]}
+                        >
+                          {num} {num === 1 ? 'Day' : 'Days'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Stepper Control */}
+                  <View style={styles.multiStepperRow}>
+                    <TouchableOpacity
+                      onPress={() => setMultiDaysInput((prev) => Math.max(1, prev - 1))}
+                      style={styles.multiStepBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="minus" size={16} color="#2563EB" />
+                    </TouchableOpacity>
+
+                    <View style={styles.multiStepValueBox}>
+                      <Text style={styles.multiStepValueText}>{multiDaysInput} Days</Text>
+                      <Text style={{ fontSize: 9.5, color: '#64748B', fontWeight: '600' }}>
+                        {multiDayAnalysis.totalScheduledClasses} Timetable Classes
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => setMultiDaysInput((prev) => Math.min(30, prev + 1))}
+                      style={styles.multiStepBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="plus" size={16} color="#2563EB" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* 2 Big Impact Comparison Cards: Multi-Day Attend All vs Bunk All */}
+                  <View style={styles.impactComparisonRow}>
+                    {/* CARD A: IF YOU ATTEND ALL */}
+                    <View style={styles.impactCardAttend}>
+                      <View style={styles.impactCardHeader}>
+                        <View style={styles.impactBadgeGreen}>
+                          <Ionicons name="trending-up" size={13} color="#059669" />
+                          <Text style={styles.impactBadgeGreenText}>ATTEND ALL {multiDaysInput}D</Text>
+                        </View>
+                        <Text style={styles.impactSubCount}>+{multiDayAnalysis.totalScheduledClasses} classes</Text>
+                      </View>
+                      <Text style={styles.impactDeltaGreen}>
+                        +{multiDayAnalysis.attendAll.delta.toFixed(2)}%
+                      </Text>
+                      <Text style={styles.impactProjectedText}>
+                        New Overall:{' '}
+                        <Text style={{ fontWeight: '800', color: '#059669' }}>
+                          {multiDayAnalysis.attendAll.newPct.toFixed(2)}%
+                        </Text>
+                      </Text>
+                      <Text style={styles.impactStatusGreen}>
+                        {multiDayAnalysis.attendAll.newPct >= targetGoal
+                          ? 'Above target goal'
+                          : `Needs ${(targetGoal - multiDayAnalysis.attendAll.newPct).toFixed(2)}% more`}
+                      </Text>
+                    </View>
+
+                    {/* CARD B: IF YOU BUNK ALL */}
+                    <View style={styles.impactCardBunk}>
+                      <View style={styles.impactCardHeader}>
+                        <View style={styles.impactBadgeRed}>
+                          <Ionicons name="trending-down" size={13} color="#DC2626" />
+                          <Text style={styles.impactBadgeRedText}>BUNK ALL {multiDaysInput}D</Text>
+                        </View>
+                        <Text style={styles.impactSubCount}>-{multiDayAnalysis.totalScheduledClasses} classes</Text>
+                      </View>
+                      <Text style={styles.impactDeltaRed}>
+                        {multiDayAnalysis.bunkAll.delta.toFixed(2)}%
+                      </Text>
+                      <Text style={styles.impactProjectedText}>
+                        New Overall:{' '}
+                        <Text style={{ fontWeight: '800', color: '#DC2626' }}>
+                          {multiDayAnalysis.bunkAll.newPct.toFixed(2)}%
+                        </Text>
+                      </Text>
+                      <Text style={styles.impactStatusRed}>
+                        {multiDayAnalysis.bunkAll.newPct < targetGoal
+                          ? `Drops ${(targetGoal - multiDayAnalysis.bunkAll.newPct).toFixed(2)}% below target!`
+                          : 'Stays safe above target'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Safety Verdict Alert Banner */}
+                  <View
+                    style={[
+                      styles.verdictBanner,
+                      {
+                        backgroundColor:
+                          multiDayAnalysis.bunkAll.newPct >= targetGoal ? '#ECFDF5' : '#FFF1F2',
+                        borderColor:
+                          multiDayAnalysis.bunkAll.newPct >= targetGoal ? '#A7F3D0' : '#FECDD3',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={multiDayAnalysis.bunkAll.newPct >= targetGoal ? 'shield-checkmark' : 'alert-circle'}
+                      size={18}
+                      color={multiDayAnalysis.bunkAll.newPct >= targetGoal ? '#059669' : '#E11D48'}
+                    />
+                    <Text style={styles.verdictBannerText}>
+                      {multiDayAnalysis.bunkAll.newPct >= targetGoal ? (
+                        <>
+                          <Text style={{ fontWeight: '800', color: '#059669' }}>
+                            Safe to miss next {multiDaysInput} days? YES.{' '}
+                          </Text>
+                          Even if you miss all {multiDayAnalysis.totalScheduledClasses} classes over {multiDaysInput} days, your overall attendance will remain at{' '}
+                          <Text style={{ fontWeight: '800' }}>{multiDayAnalysis.bunkAll.newPct.toFixed(2)}%</Text>{' '}
+                          (above {targetGoal}% target).
+                        </>
+                      ) : (
+                        <>
+                          <Text style={{ fontWeight: '800', color: '#E11D48' }}>
+                            Safe to miss next {multiDaysInput} days? NO.{' '}
+                          </Text>
+                          Missing all {multiDayAnalysis.totalScheduledClasses} classes drops your attendance to{' '}
+                          <Text style={{ fontWeight: '800' }}>{multiDayAnalysis.bunkAll.newPct.toFixed(2)}%</Text>, falling{' '}
+                          <Text style={{ fontWeight: '800' }}>
+                            {(targetGoal - multiDayAnalysis.bunkAll.newPct).toFixed(2)}%
+                          </Text>{' '}
+                          below your {targetGoal}% institutional goal!
+                        </>
+                      )}
+                    </Text>
+                  </View>
+
+                  {/* Day-by-Day Sequence Breakdown */}
+                  <View style={styles.multiDaySeqContainer}>
+                    <Text style={{ color: '#0F172A', fontSize: 12.5, fontWeight: '800', marginBottom: 4 }}>
+                      Upcoming Schedule Breakdown ({multiDayAnalysis.daysSequence.length} Days)
+                    </Text>
+                    {multiDayAnalysis.daysSequence.map((item, idx) => (
+                      <View key={idx} style={styles.multiDaySeqRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                          <Text style={{ color: '#64748B', fontSize: 10, fontWeight: '700' }}>
+                            Day {idx + 1}:
+                          </Text>
+                          <Text style={styles.multiDaySeqName}>{item.day}</Text>
+                          <Text style={{ color: '#64748B', fontSize: 10.5, flex: 1 }} numberOfLines={1}>
+                            {item.subjects.length > 0 ? item.subjects.slice(0, 3).join(', ') : 'No classes'}
+                          </Text>
+                        </View>
+                        <Text style={styles.multiDaySeqCount}>{item.count} classes</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* TAB 4: TARGET PLANNER (SEPARATE TAB) */}
+        {activeTab === 'Target Planner' && (
+          <View style={styles.tabContentWrapper}>
+            {/* INSTITUTIONAL TARGET GOAL PICKER */}
+            <View style={styles.targetAdjustCard}>
+              <View style={styles.targetAdjustHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="flag-outline" size={16} color="#4338CA" />
+                  <Text style={styles.targetAdjustTitle}>Institutional Attendance Target</Text>
+                </View>
+                <View style={styles.targetValueBadge}>
+                  <Text style={styles.targetValueBadgeText}>{targetGoal}%</Text>
+                </View>
+              </View>
+
+              <View style={styles.targetBtnRow}>
+                {[65, 75, 80, 85, 90].map((goal) => {
+                  const isSelected = targetGoal === goal;
+                  return (
+                    <TouchableOpacity
+                      key={goal}
+                      onPress={() => setTargetGoal(goal)}
+                      style={[styles.targetChoiceBtn, isSelected && styles.targetChoiceBtnActive]}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.targetChoiceText,
+                          isSelected && styles.targetChoiceTextActive,
+                        ]}
+                      >
+                        {goal}%
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             {/* SECTION 2: SAFE BUNK & RECOVERY PER SUBJECT */}
-            <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
+            <View style={[styles.sectionHeaderRow, { marginTop: 14 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <MaterialCommunityIcons name="shield-airplane-outline" size={18} color="#3778D5" />
                 <Text style={styles.sectionTitle}>Safe Bunk & Attendance Recovery per Subject</Text>
@@ -3732,6 +4104,127 @@ const styles = StyleSheet.create({
   simApplyBtnText: {
     color: '#FFFFFF',
     fontSize: 12.5,
+    fontWeight: '800',
+  },
+  impactModeToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 14,
+    gap: 4,
+  },
+  impactModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 7,
+    borderRadius: 9,
+  },
+  impactModeBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  impactModeBtnText: {
+    color: '#64748B',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  impactModeBtnTextActive: {
+    color: '#2563EB',
+    fontWeight: '800',
+  },
+  multiStepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    marginVertical: 10,
+  },
+  multiStepBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  multiStepValueBox: {
+    minWidth: 120,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#2563EB',
+    alignItems: 'center',
+  },
+  multiStepValueText: {
+    color: '#0F172A',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  multiPresetRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 8,
+  },
+  multiPresetBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  multiPresetBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  multiPresetBtnText: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  multiPresetBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  multiDaySeqContainer: {
+    marginTop: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  multiDaySeqRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  multiDaySeqName: {
+    color: '#1E293B',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  multiDaySeqCount: {
+    color: '#2563EB',
+    fontSize: 11,
     fontWeight: '800',
   },
 });
